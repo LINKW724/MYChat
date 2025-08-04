@@ -1,0 +1,1398 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>实时聊天应用</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.5.1/sockjs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
+    <style>
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #888; border-radius: 3px;}
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #555; }
+        .hidden { display: none; }
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex; align-items: center; justify-content: center;
+            z-index: 50;
+        }
+        .message-container {
+            transition: all 0.3s ease;
+            transform-origin: bottom;
+        }
+        .fade-in { animation: fadeIn 0.3s ease-in; }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .status-dot {
+            height: 0.65rem; width: 0.65rem;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 0.5rem;
+            flex-shrink: 0;
+            transition: background-color 0.3s ease; /* Added transition for smooth color change */
+        }
+        .online { background-color: #22c55e; } /* green-500 */
+        .offline { background-color: #9ca3af; } /* gray-400 */
+        .tab-button.active {
+            border-color: #4f46e5; /* indigo-600 */
+            color: #4f46e5;
+            background-color: #eef2ff; /* indigo-50 */
+        }
+        /* File upload progress bar style */
+        .progress-bar-container {
+            width: 100%;
+            background-color: #e0e0e0;
+            border-radius: 4px;
+            margin-top: 4px;
+        }
+        .progress-bar {
+            height: 6px;
+            width: 0;
+            background-color: #4caf50;
+            border-radius: 4px;
+            transition: width 0.3s ease-in-out;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans">
+
+<!-- Login and Register pages -->
+<div id="login-page" class="flex items-center justify-center h-screen">
+    <div class="w-full max-w-md p-8 space-y-6 bg-white rounded-lg shadow-md">
+        <h2 class="text-2xl font-bold text-center text-gray-800">登录</h2>
+        <form id="login-form" class="space-y-6">
+            <div>
+                <label for="login-username" class="text-sm font-medium text-gray-700">用户名</label>
+                <input id="login-username" type="text" required class="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+            </div>
+            <div>
+                <label for="login-password" class="text-sm font-medium text-gray-700">密码</label>
+                <input id="login-password" type="password" required class="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+            </div>
+            <p id="login-error" class="text-sm text-red-600"></p>
+            <div class="flex items-center justify-between">
+                <a href="#" id="forgot-password-link" class="text-sm text-indigo-600 hover:text-indigo-500">忘记密码?</a>
+            </div>
+            <div>
+                <button type="submit" class="w-full px-4 py-2 font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">登录</button>
+            </div>
+        </form>
+        <p class="text-sm text-center text-gray-600">
+            没有账户? <a href="#" id="show-register" class="font-medium text-indigo-600 hover:text-indigo-500">立即注册</a>
+        </p>
+    </div>
+</div>
+<div id="register-page" class="hidden flex items-center justify-center min-h-screen py-8">
+    <div class="w-full max-w-md p-8 space-y-4 bg-white rounded-lg shadow-md">
+        <h2 class="text-2xl font-bold text-center text-gray-800">注册</h2>
+        <form id="register-form" class="space-y-4">
+            <div>
+                <label for="register-username" class="text-sm font-medium text-gray-700">用户名</label>
+                <input id="register-username" name="username" type="text" required class="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+            </div>
+            <div>
+                <label for="register-nickname" class="text-sm font-medium text-gray-700">昵称</label>
+                <input id="register-nickname" name="nickname" type="text" required class="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+            </div>
+            <div>
+                <label for="register-password" class="text-sm font-medium text-gray-700">密码</label>
+                <input id="register-password" name="password" type="password" required class="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+            </div>
+            <div>
+                <label for="security-question-select" class="text-sm font-medium text-gray-700">找回问题</label>
+                <select id="security-question-select" class="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm">
+                    <option value="你喜欢的颜色是？">你喜欢的颜色是？</option>
+                    <option value="你的生日是？">你的生日是？</option>
+                    <option value="custom">自定义问题</option>
+                </select>
+                <input id="security-question-custom" name="securityQuestion" type="text" placeholder="请输入你的自定义问题" class="hidden w-full px-3 py-2 mt-2 border border-gray-300 rounded-md">
+            </div>
+            <div>
+                <label for="security-answer" class="text-sm font-medium text-gray-700">问题答案</label>
+                <input id="security-answer" name="securityAnswer" type="text" required class="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm">
+            </div>
+            <div>
+                <label for="register-avatar" class="text-sm font-medium text-gray-700">头像 (可选)</label>
+                <input id="register-avatar" name="avatar" type="file" accept="image/*" class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-600 hover:file:bg-indigo-100">
+            </div>
+            <p id="register-error" class="text-sm text-red-600"></p>
+            <div>
+                <button type="submit" class="w-full px-4 py-2 font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">注册</button>
+            </div>
+        </form>
+        <p class="text-sm text-center text-gray-600">
+            已有账户? <a href="#" id="show-login" class="font-medium text-indigo-600 hover:text-indigo-500">返回登录</a>
+        </p>
+    </div>
+</div>
+
+
+<!-- Responsive Chat Page -->
+<div id="chat-page" class="hidden h-screen overflow-x-hidden">
+    <div class="relative flex h-full">
+        <!-- Sidebar -->
+        <div id="chat-sidebar" class="flex flex-col w-full flex-shrink-0 bg-gray-200 border-r border-gray-300 sm:w-1/3 sm:max-w-sm transform transition-transform duration-300 ease-in-out">
+            <div class="p-4 border-b border-gray-300">
+                <div class="flex justify-between items-center">
+                    <h2 class="text-xl font-semibold">欢迎, <span id="current-user-nickname"></span>!</h2>
+                    <button id="settings-button" class="p-2 rounded-full hover:bg-gray-300">
+                        <svg class="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                    </button>
+                </div>
+                <div class="mt-4 flex space-x-2">
+                    <button id="manage-friends-button" class="relative flex-1 px-3 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700">
+                        好友请求
+                        <span id="friend-notification-badge" class="hidden absolute -top-1 -right-1 block h-3 w-3 rounded-full bg-red-500 ring-2 ring-white"></span>
+                    </button>
+                    <button id="manage-rooms-button" class="relative flex-1 px-3 py-2 text-sm font-medium text-white bg-purple-600 rounded-md hover:bg-purple-700">
+                        群组请求
+                        <span id="room-notification-badge" class="hidden absolute -top-1 -right-1 block h-3 w-3 rounded-full bg-red-500 ring-2 ring-white"></span>
+                    </button>
+                </div>
+            </div>
+            <div class="flex-grow p-2 overflow-y-auto custom-scrollbar">
+                <div class="px-2 mt-2">
+                    <h3 class="text-lg font-semibold text-gray-700 mb-2">添加好友</h3>
+                    <div class="relative">
+                        <input type="text" id="user-search-input" placeholder="搜索用户名或昵称..." class="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-md">
+                        <svg class="w-5 h-5 text-gray-400 absolute top-1/2 left-2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                    </div>
+                    <div id="user-search-results" class="mt-2 space-y-1 max-h-40 overflow-y-auto custom-scrollbar"></div>
+                </div>
+
+                <h3 class="p-2 mt-4 text-lg font-semibold text-gray-700">好友列表</h3>
+                <div id="friends-list" class="space-y-1"></div>
+
+                <div class="px-2 mt-4">
+                    <div class="flex justify-between items-center mb-2">
+                        <h3 class="text-lg font-semibold text-gray-700">公共聊天室</h3>
+                        <button id="create-room-button" class="px-2 py-1 text-sm font-bold text-white bg-green-600 rounded-md hover:bg-green-700" title="创建新聊天室">+</button>
+                    </div>
+                    <div id="chat-rooms-list" class="space-y-1"></div>
+                </div>
+
+                <h3 class="p-2 mt-4 text-lg font-semibold text-gray-700">最近聊天</h3>
+                <div id="chat-history-list" class="space-y-1"></div>
+            </div>
+        </div>
+
+        <!-- Main Chat Area -->
+        <div id="chat-main" class="flex flex-col flex-grow absolute sm:relative top-0 left-0 w-full h-full bg-white transform sm:transform-none transition-transform duration-300 ease-in-out translate-x-full sm:translate-x-0">
+            <div id="chat-welcome" class="flex items-center justify-center h-full text-gray-500">
+                <p>请从左侧选择一个好友或群组开始聊天</p>
+            </div>
+            <div id="chat-area" class="hidden flex flex-col h-full">
+                <div class="flex items-center justify-between p-4 bg-white border-b border-gray-300 flex-shrink-0">
+                    <div class="flex items-center">
+                        <button id="back-to-list-button" class="p-2 -ml-2 mr-2 rounded-full hover:bg-gray-200 sm:hidden">
+                            <svg class="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7 7-7"></path></svg>
+                        </button>
+                        <h3 id="chat-with" class="text-xl font-semibold truncate"></h3>
+                    </div>
+                    <!-- The "delete chat" button is now removed from here -->
+                </div>
+                <div id="message-area" class="flex-grow p-4 overflow-y-auto bg-gray-50 custom-scrollbar"></div>
+                <div class="p-4 bg-white border-t border-gray-300 flex-shrink-0">
+                    <div id="file-upload-preview" class="hidden mb-2 p-2 border rounded-md bg-gray-100"></div>
+                    <form id="message-form" class="flex items-center">
+                        <!-- File Upload Button -->
+                        <label for="file-input" class="mr-2 p-2 rounded-full hover:bg-gray-200 cursor-pointer">
+                            <svg class="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path></svg>
+                        </label>
+                        <input type="file" id="file-input" class="hidden">
+
+                        <input type="text" id="message-input" placeholder="输入消息..." autocomplete="off" class="flex-grow px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                        <button type="submit" class="ml-4 px-6 py-2 font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700">发送</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<!-- Modals -->
+<div id="create-room-modal" class="hidden modal-overlay">
+    <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-sm">
+        <h3 class="text-lg font-bold mb-4">创建新聊天室</h3>
+        <input id="new-room-name" type="text" placeholder="输入聊天室名称" class="w-full px-3 py-2 border rounded-md">
+        <div class="mt-4 flex justify-end space-x-2">
+            <button class="modal-cancel px-4 py-2 bg-gray-300 rounded-md">取消</button>
+            <button id="confirm-create-room" class="px-4 py-2 bg-blue-600 text-white rounded-md">创建</button>
+        </div>
+    </div>
+</div>
+<div id="manage-rooms-modal" class="hidden modal-overlay">
+    <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-md">
+        <h3 class="text-lg font-bold mb-4">待处理的群组加入请求</h3>
+        <div id="join-requests-container" class="space-y-2 max-h-60 overflow-y-auto custom-scrollbar"></div>
+        <div class="mt-4 flex justify-end">
+            <button class="modal-cancel px-4 py-2 bg-gray-300 rounded-md">关闭</button>
+        </div>
+    </div>
+</div>
+<div id="manage-friends-modal" class="hidden modal-overlay">
+    <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-md">
+        <h3 class="text-lg font-bold mb-4">待处理的好友请求</h3>
+        <div id="friend-requests-container" class="space-y-2 max-h-60 overflow-y-auto custom-scrollbar"></div>
+        <div class="mt-4 flex justify-end">
+            <button class="modal-cancel px-4 py-2 bg-gray-300 rounded-md">关闭</button>
+        </div>
+    </div>
+</div>
+<div id="forgot-password-modal" class="hidden modal-overlay">
+    <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-md space-y-4">
+        <h3 class="text-lg font-bold">忘记密码</h3>
+        <div id="fp-step1">
+            <label for="fp-username">请输入你的用户名</label>
+            <input id="fp-username" type="text" class="w-full px-3 py-2 mt-1 border rounded-md">
+            <button id="fp-next-step1" class="w-full mt-4 px-4 py-2 bg-blue-600 text-white rounded-md">下一步</button>
+        </div>
+        <div id="fp-step2" class="hidden">
+            <p id="fp-question" class="mb-2 p-2 bg-gray-100 rounded"></p>
+            <label for="fp-answer">请输入答案</label>
+            <input id="fp-answer" type="text" class="w-full px-3 py-2 mt-1 border rounded-md">
+            <label for="fp-new-password" class="mt-2">请输入新密码</label>
+            <input id="fp-new-password" type="password" class="w-full px-3 py-2 mt-1 border rounded-md">
+            <button id="fp-submit" class="w-full mt-4 px-4 py-2 bg-blue-600 text-white rounded-md">重置密码</button>
+        </div>
+        <p id="fp-error" class="text-sm text-red-600"></p>
+        <div class="mt-4 flex justify-end">
+            <button class="modal-cancel px-4 py-2 bg-gray-300 rounded-md">取消</button>
+        </div>
+    </div>
+</div>
+<div id="settings-modal" class="hidden modal-overlay">
+    <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl h-auto max-h-[80vh] flex flex-col">
+        <div class="p-4 border-b flex justify-between items-center">
+            <h3 class="text-xl font-bold">设置</h3>
+            <button class="modal-cancel p-2 rounded-full hover:bg-gray-200">&times;</button>
+        </div>
+        <div class="flex flex-grow overflow-hidden">
+            <div class="w-1/3 md:w-1/4 border-r p-2 bg-gray-50">
+                <button data-tab="account" class="tab-button w-full text-left p-3 rounded-md active">账户设置</button>
+                <button data-tab="friends" class="tab-button w-full text-left p-3 rounded-md">好友管理</button>
+                <!-- New "Group Management" Tab -->
+                <button data-tab="groups" class="tab-button w-full text-left p-3 rounded-md">群聊管理</button>
+            </div>
+            <div class="w-2/3 md:w-3/4 p-6 overflow-y-auto custom-scrollbar">
+                <div id="tab-content-account" class="space-y-6">
+                    <div>
+                        <h4 class="font-semibold text-lg">修改头像</h4>
+                        <div class="flex items-center space-x-4 mt-2">
+                            <img id="settings-avatar-preview" src="" class="w-20 h-20 rounded-full bg-gray-200 object-cover">
+                            <input id="settings-avatar-input" type="file" accept="image/*" class="text-sm">
+                        </div>
+                        <button id="settings-update-avatar" class="mt-2 px-4 py-2 text-sm bg-blue-600 text-white rounded-md">上传新头像</button>
+                    </div>
+                    <hr>
+                    <div>
+                        <h4 class="font-semibold text-lg">修改密码</h4>
+                        <form id="change-password-form" class="space-y-3 mt-2">
+                            <input id="old-password" type="password" placeholder="旧密码" required class="w-full px-3 py-2 border rounded-md">
+                            <input id="new-password" type="password" placeholder="新密码" required class="w-full px-3 py-2 border rounded-md">
+                            <button type="submit" class="px-4 py-2 text-sm bg-blue-600 text-white rounded-md">确认修改</button>
+                        </form>
+                    </div>
+                    <hr>
+                    <div>
+                        <h4 class="font-semibold text-lg">账户操作</h4>
+                        <button id="logout-button-settings" class="mt-2 px-4 py-2 text-sm bg-red-600 text-white rounded-md">退出登录</button>
+                    </div>
+                </div>
+                <div id="tab-content-friends" class="hidden space-y-2">
+                    <h4 class="font-semibold text-lg">我的好友</h4>
+                    <div id="settings-friends-list" class="max-h-96 overflow-y-auto custom-scrollbar"></div>
+                </div>
+                <!-- New "Group Management" Content Area -->
+                <div id="tab-content-groups" class="hidden space-y-2">
+                    <h4 class="font-semibold text-lg">我加入的群聊</h4>
+                    <div id="settings-groups-list" class="max-h-96 overflow-y-auto custom-scrollbar"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<script>
+    // --- Global Config ---
+    const API_BASE_URL = 'http://192.168.192.242:8081';
+    const WEBSOCKET_URL = `${API_BASE_URL}/ws`;
+
+
+    // --- DOM Elements ---
+    const loginPage = document.getElementById('login-page'), registerPage = document.getElementById('register-page'), chatPage = document.getElementById('chat-page');
+    const loginForm = document.getElementById('login-form'), registerForm = document.getElementById('register-form');
+    const showRegisterLink = document.getElementById('show-register'), showLoginLink = document.getElementById('show-login');
+    const messageForm = document.getElementById('message-form'), messageInput = document.getElementById('message-input'), messageArea = document.getElementById('message-area');
+    const friendsList = document.getElementById('friends-list'), chatHistoryList = document.getElementById('chat-history-list'), chatRoomsList = document.getElementById('chat-rooms-list');
+    const currentUserNicknameEl = document.getElementById('current-user-nickname'), chatWithEl = document.getElementById('chat-with');
+    const chatSidebar = document.getElementById('chat-sidebar'), chatMain = document.getElementById('chat-main'), backToListButton = document.getElementById('back-to-list-button');
+    const chatArea = document.getElementById('chat-area'), chatWelcome = document.getElementById('chat-welcome');
+    const userSearchInput = document.getElementById('user-search-input'), userSearchResults = document.getElementById('user-search-results');
+    const manageFriendsButton = document.getElementById('manage-friends-button'), manageFriendsModal = document.getElementById('manage-friends-modal');
+    const friendRequestsContainer = document.getElementById('friend-requests-container'), friendNotificationBadge = document.getElementById('friend-notification-badge');
+    const manageRoomsButton = document.getElementById('manage-rooms-button'), manageRoomsModal = document.getElementById('manage-rooms-modal');
+    const joinRequestsContainer = document.getElementById('join-requests-container'), roomNotificationBadge = document.getElementById('room-notification-badge');
+    const createRoomButton = document.getElementById('create-room-button'), createRoomModal = document.getElementById('create-room-modal');
+    const confirmCreateRoomBtn = document.getElementById('confirm-create-room');
+    const forgotPasswordLink = document.getElementById('forgot-password-link'), forgotPasswordModal = document.getElementById('forgot-password-modal');
+    const securityQuestionSelect = document.getElementById('security-question-select'), securityQuestionCustom = document.getElementById('security-question-custom');
+    const settingsButton = document.getElementById('settings-button'), settingsModal = document.getElementById('settings-modal');
+    const logoutButtonSettings = document.getElementById('logout-button-settings');
+    const fileInput = document.getElementById('file-input');
+    const fileUploadPreview = document.getElementById('file-upload-preview');
+
+    // --- App State ---
+    let stompClient = null, currentUser = null, activeChat = null;
+    let onlineUsers = new Set();
+    let activeSubscription = null;
+    let selectedFile = null;
+
+    // --- Event Listeners ---
+    showRegisterLink.addEventListener('click', (e) => { e.preventDefault(); loginPage.classList.add('hidden'); registerPage.classList.remove('hidden'); });
+    showLoginLink.addEventListener('click', (e) => { e.preventDefault(); registerPage.classList.add('hidden'); loginPage.classList.remove('hidden'); });
+    loginForm.addEventListener('submit', handleLogin);
+    registerForm.addEventListener('submit', handleRegister);
+    messageForm.addEventListener('submit', sendMessage);
+    userSearchInput.addEventListener('input', debounce(searchUsers, 300));
+    manageFriendsButton.addEventListener('click', showFriendRequestsModal);
+    manageRoomsButton.addEventListener('click', showManageRoomsModal);
+    createRoomButton.addEventListener('click', () => createRoomModal.classList.remove('hidden'));
+    confirmCreateRoomBtn.addEventListener('click', createRoom);
+    forgotPasswordLink.addEventListener('click', (e) => { e.preventDefault(); forgotPasswordModal.classList.remove('hidden'); });
+    securityQuestionSelect.addEventListener('change', () => { securityQuestionCustom.classList.toggle('hidden', securityQuestionSelect.value !== 'custom'); });
+    settingsButton.addEventListener('click', showSettingsModal);
+    logoutButtonSettings.addEventListener('click', handleLogout);
+    backToListButton.addEventListener('click', () => {
+        chatSidebar.classList.remove('-translate-x-full');
+        chatMain.classList.add('translate-x-full');
+        activeChat = null;
+    });
+    fileInput.addEventListener('change', handleFileSelection);
+
+    document.querySelectorAll('.modal-cancel').forEach(btn => {
+        btn.addEventListener('click', () => {
+            btn.closest('.modal-overlay').classList.add('hidden');
+        });
+    });
+
+    // --- Page Load ---
+    document.addEventListener('DOMContentLoaded', () => {
+        const storedUser = localStorage.getItem('chatUser');
+        if (storedUser) {
+            try {
+                currentUser = JSON.parse(storedUser);
+                connectAndSetup();
+            } catch (e) {
+                localStorage.removeItem('chatUser');
+            }
+        }
+    });
+
+    // --- Helper Functions ---
+    function getAvatarUrl(username) { return `${API_BASE_URL}/api/users/${username}/avatar?t=${new Date().getTime()}`; }
+    function formatFileSize(bytes) {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+    function debounce(fn, delay) {
+        let timeoutId;
+        return (...args) => {
+            if (timeoutId) clearTimeout(timeoutId);
+            timeoutId = setTimeout(() => fn(...args), delay);
+        };
+    }
+    function showToast(message, type = 'info') {
+        const toast = document.createElement('div');
+        toast.className = `fixed top-4 right-4 px-4 py-3 rounded-md shadow-lg text-white ${type === 'success' ? 'bg-green-500' : type === 'error' ? 'bg-red-500' : 'bg-blue-500'} fade-in z-50`;
+        toast.innerHTML = `<span>${message}</span>`;
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 3000);
+    }
+
+    // --- Authentication & Connection ---
+    async function handleLogin(e) {
+        e.preventDefault();
+        const username = document.getElementById('login-username').value.trim();
+        const password = document.getElementById('login-password').value.trim();
+        const errorEl = document.getElementById('login-error');
+        errorEl.textContent = '';
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            });
+            if (response.ok) {
+                const user = await response.json();
+                currentUser = { username: user.username, nickname: user.nickname };
+                localStorage.setItem('chatUser', JSON.stringify(currentUser));
+                connectAndSetup();
+            } else {
+                errorEl.textContent = await response.text();
+            }
+        } catch (error) {
+            errorEl.textContent = '登录请求失败，请检查网络连接。';
+        }
+    }
+    async function handleRegister(e) {
+        e.preventDefault();
+        const formData = new FormData(registerForm);
+        const errorEl = document.getElementById('register-error');
+        errorEl.textContent = '';
+        if (securityQuestionSelect.value !== 'custom') {
+            formData.set('securityQuestion', securityQuestionSelect.value);
+        }
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/auth/register`, { method: 'POST', body: formData });
+            if (response.ok) {
+                showToast('注册成功! 请登录。', 'success');
+                showLoginLink.click();
+                registerForm.reset();
+            } else {
+                errorEl.textContent = await response.text();
+            }
+        } catch (error) {
+            errorEl.textContent = '注册请求失败，请检查网络连接。';
+        }
+    }
+    async function handleLogout() {
+        try {
+            await fetch(`${API_BASE_URL}/api/auth/logout`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: currentUser.username })
+            });
+        } catch (error) {
+            console.error("退出登录请求失败:", error);
+        } finally {
+            localStorage.removeItem('chatUser');
+            if (currentUser) {
+                localStorage.removeItem(`recentChats_${currentUser.username}`);
+            }
+            if (stompClient) {
+                stompClient.disconnect();
+            }
+            location.reload();
+        }
+    }
+    function connectAndSetup() {
+        loginPage.classList.add('hidden');
+        registerPage.classList.add('hidden');
+        chatPage.classList.remove('hidden');
+        currentUserNicknameEl.textContent = currentUser.nickname;
+        const socket = new SockJS(WEBSOCKET_URL);
+        stompClient = Stomp.over(socket);
+        stompClient.connect({}, onConnected, onError);
+        loadInitialData();
+    }
+    function onConnected() {
+        stompClient.subscribe('/topic/status', onStatusUpdateReceived);
+        stompClient.subscribe(`/user/queue/notifications`, onNotificationReceived);
+        stompClient.subscribe(`/user/queue/status`, onInitialStatusListReceived);
+        stompClient.subscribe('/user/queue/errors', onConnectionError);
+        stompClient.subscribe('/topic/rooms', () => {
+            loadChatRooms();
+            if(!settingsModal.classList.contains('hidden') && document.querySelector('.tab-button[data-tab="groups"]').classList.contains('active')) {
+                loadGroupsForSettings();
+            }
+        });
+        stompClient.send("/app/chat.addUser", {}, JSON.stringify({sender: currentUser.username, type: 'JOIN'}));
+        stompClient.send(`/app/status.getOnlineUsers`, {}, currentUser.username);
+    }
+    function onError(error) {
+        console.error('WebSocket Error:', error);
+        showToast('无法连接到聊天服务器。请刷新页面重试。', 'error');
+    }
+    function onConnectionError(payload) {
+        const error = JSON.parse(payload.body);
+        if (error.type === 'DUPLICATE_LOGIN') {
+            showToast(error.message, 'error');
+            if (stompClient) { stompClient.disconnect(); }
+            localStorage.removeItem('chatUser');
+            if(currentUser) { localStorage.removeItem(`recentChats_${currentUser.username}`); }
+            setTimeout(() => location.reload(), 3000);
+        }
+    }
+
+    // --- Message & File Handling ---
+    function sendMessage(e) {
+        e.preventDefault();
+        if (selectedFile) {
+            uploadAndSendFile();
+        } else {
+            sendTextMessage();
+        }
+    }
+    function sendTextMessage() {
+        const messageContent = messageInput.value.trim();
+        if (messageContent && stompClient && activeChat) {
+            const chatMessage = {
+                sender: currentUser.username,
+                receiver: activeChat.id,
+                content: messageContent,
+                type: 'CHAT'
+            };
+            stompClient.send("/app/chat.sendMessage", {}, JSON.stringify(chatMessage));
+            messageInput.value = '';
+        }
+    }
+    function handleFileSelection(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        selectedFile = file;
+        fileUploadPreview.innerHTML = `
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm font-medium truncate">${file.name}</p>
+                    <p class="text-xs text-gray-500">${formatFileSize(file.size)}</p>
+                </div>
+                <button onclick="cancelFileUpload()" class="p-1 rounded-full hover:bg-gray-300">&times;</button>
+            </div>
+            <div class="progress-bar-container mt-1"><div class="progress-bar"></div></div>
+        `;
+        fileUploadPreview.classList.remove('hidden');
+        messageInput.disabled = true;
+    }
+    function cancelFileUpload() {
+        selectedFile = null;
+        fileInput.value = '';
+        fileUploadPreview.classList.add('hidden');
+        fileUploadPreview.innerHTML = '';
+        messageInput.disabled = false;
+    }
+    async function uploadAndSendFile() {
+        if (!selectedFile || !activeChat) return;
+        const file = selectedFile;
+        const progressBar = fileUploadPreview.querySelector('.progress-bar');
+
+        if (file.size > 100 * 1024 * 1024) {
+            showToast('文件超过100MB，无法通过服务器发送。', 'error');
+            cancelFileUpload();
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('sender', currentUser.username);
+
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', `${API_BASE_URL}/api/files/upload`, true);
+
+        xhr.upload.onprogress = (event) => {
+            if (event.lengthComputable) {
+                const percentComplete = (event.loaded / event.total) * 100;
+                progressBar.style.width = percentComplete + '%';
+            }
+        };
+
+        xhr.onload = () => {
+            progressBar.style.width = '100%';
+            if (xhr.status === 200) {
+                const response = JSON.parse(xhr.responseText);
+                stompClient.send("/app/chat.sendMessage", {}, JSON.stringify({
+                    sender: currentUser.username,
+                    receiver: activeChat.id,
+                    type: 'FILE',
+                    fileId: response.fileId,
+                    fileName: response.fileName,
+                    fileSize: response.fileSize
+                }));
+                setTimeout(() => {
+                    showToast('文件发送成功', 'success');
+                    cancelFileUpload();
+                }, 300);
+            } else {
+                try {
+                    const error = JSON.parse(xhr.responseText);
+                    showToast(`文件上传失败: ${error.message || '服务器错误'}`, 'error');
+                } catch (e) {
+                    showToast(`文件上传失败: ${xhr.statusText}`, 'error');
+                }
+                cancelFileUpload();
+            }
+        };
+
+        xhr.onerror = () => {
+            showToast('文件上传失败，请检查网络连接或服务器状态。', 'error');
+            cancelFileUpload();
+        };
+
+        xhr.send(formData);
+    }
+
+    // --- UI & State Updates ---
+    function loadInitialData() {
+        loadFriends();
+        loadChatRooms();
+        loadRecentChats();
+        checkForPendingRequests();
+    }
+    /**
+     * [MODIFIED] This function is called when the initial list of online users is received from the WebSocket.
+     * It now triggers the update of all friend status indicators.
+     */
+    function onInitialStatusListReceived(payload) {
+        const data = JSON.parse(payload.body);
+        if (data.type === 'online-list') {
+            onlineUsers = new Set(data.users);
+            // Now that we have the definitive online list, update the UI.
+            updateAllFriendStatuses();
+        }
+    }
+    function onStatusUpdateReceived(payload) {
+        const update = JSON.parse(payload.body);
+        if (update.status === 'ONLINE') {
+            onlineUsers.add(update.username);
+        } else {
+            onlineUsers.delete(update.username);
+        }
+        updateFriendStatus(update.username, update.status === 'ONLINE');
+    }
+    function onMessageReceived(payload) {
+        const message = JSON.parse(payload.body);
+        if (activeChat && activeChat.id === message.receiver) {
+            displayMessage(message);
+        }
+        let chatName = '...';
+        const historyItem = document.getElementById(`history-${message.receiver}`);
+        if(historyItem) { chatName = historyItem.dataset.name; }
+        else if (activeChat && activeChat.id === message.receiver) { chatName = activeChat.name; }
+        updateChatHistoryList(message.receiver, chatName, message.receiver.startsWith('room-') ? 'group' : 'private', message.type === 'FILE' ? `[文件] ${message.fileName}` : message.content);
+    }
+    function onNotificationReceived(payload) {
+        const notification = JSON.parse(payload.body);
+        if(notification.content && notification.content.includes("申请加入您的聊天室")){
+            notification.type = "ROOM_JOIN_REQUEST";
+        }
+        switch (notification.type) {
+            case 'FRIEND_REQUEST':
+                showToast(`${notification.from} 想加您为好友`);
+                friendNotificationBadge.classList.remove('hidden');
+                if (!manageFriendsModal.classList.contains('hidden')) loadFriendRequests();
+                break;
+            case 'FRIEND_ACCEPT':
+                showToast(`${notification.from} 同意了您的好友请求`);
+                loadFriends();
+                break;
+            case 'ROOM_JOIN_REQUEST':
+                showToast(notification.content);
+                roomNotificationBadge.classList.remove('hidden');
+                if (!manageRoomsModal.classList.contains('hidden')) loadRoomRequests();
+                break;
+            case 'FRIEND_LIST_UPDATE':
+                showToast('好友列表已更新');
+                loadFriends();
+                break;
+            default:
+                showToast(`系统通知: ${notification.content || '您有新消息'}`);
+        }
+    }
+    function saveRecentChats() {
+        if (!currentUser) return;
+        const recentChats = Array.from(chatHistoryList.querySelectorAll('div[id^="history-"]')).map(item => ({
+            id: item.dataset.id,
+            name: item.dataset.name,
+            type: item.dataset.type,
+            lastMessage: item.querySelector('.text-gray-600').textContent
+        }));
+        localStorage.setItem(`recentChats_${currentUser.username}`, JSON.stringify(recentChats));
+    }
+    function loadRecentChats() {
+        if (!currentUser) return;
+        const savedChats = localStorage.getItem(`recentChats_${currentUser.username}`);
+        if (savedChats) {
+            try {
+                const recentChats = JSON.parse(savedChats);
+                if (!Array.isArray(recentChats)) throw new Error("Saved chat data is not an array.");
+                chatHistoryList.innerHTML = '';
+                recentChats.forEach(chat => {
+                    if (chat && chat.id && chat.name && chat.type) {
+                        updateChatHistoryList(chat.id, chat.name, chat.type, chat.lastMessage, false);
+                    }
+                });
+            } catch (e) {
+                console.error("Could not parse recent chats:", e);
+                localStorage.removeItem(`recentChats_${currentUser.username}`);
+            }
+        }
+    }
+    function updateChatHistoryList(channelId, name, type, lastMessage, shouldSave = true) {
+        const historyItemId = `history-${channelId}`;
+        let historyItem = document.getElementById(historyItemId);
+        if (historyItem) { historyItem.remove(); }
+        historyItem = document.createElement('div');
+        historyItem.id = historyItemId;
+        historyItem.dataset.id = channelId;
+        historyItem.dataset.name = name;
+        historyItem.dataset.type = type;
+        historyItem.className = 'p-2 hover:bg-gray-300 cursor-pointer rounded-md';
+        let originalId = channelId;
+        if(type === 'private'){
+            const users = channelId.substring(8).split('-');
+            originalId = users[0] === currentUser.username ? users[1] : users[0];
+        }
+        historyItem.onclick = () => openChat(originalId, name, type);
+        historyItem.innerHTML = `
+            <div class="font-semibold truncate">${name}</div>
+            <div class="text-sm text-gray-600 truncate">${lastMessage || '...'}</div>
+        `;
+        chatHistoryList.prepend(historyItem);
+        if (shouldSave) { saveRecentChats(); }
+    }
+    async function openChat(id, name, type) {
+        let channelId;
+        if (type === 'private') {
+            const users = [currentUser.username, id].sort();
+            channelId = `private-${users[0]}-${users[1]}`;
+        } else {
+            channelId = id;
+        }
+        if (activeSubscription) { activeSubscription.unsubscribe(); }
+        if (stompClient && stompClient.connected) {
+            activeSubscription = stompClient.subscribe(`/topic/chat/${channelId}`, onMessageReceived);
+        } else {
+            showToast("WebSocket未连接，无法打开聊天。", 'error');
+            return;
+        }
+        if (window.innerWidth < 640) {
+            chatSidebar.classList.add('-translate-x-full');
+            chatMain.classList.remove('translate-x-full');
+        }
+
+        activeChat = { id: channelId, name, type };
+        chatWelcome.classList.add('hidden');
+        chatArea.classList.remove('hidden');
+        chatWithEl.textContent = name;
+        messageArea.innerHTML = '';
+
+        try {
+            const historyUrl = `${API_BASE_URL}/api/history/${channelId}?username=${currentUser.username}`;
+            const historyResponse = await fetch(historyUrl);
+            if (!historyResponse.ok) { throw new Error(await historyResponse.text()); }
+            const messages = await historyResponse.json();
+            messages.forEach(displayMessage);
+            const lastMsg = messages.length > 0 ? (messages[messages.length-1].type === 'FILE' ? `[文件] ${messages[messages.length-1].fileName}` : messages[messages.length-1].content) : '开始聊天吧';
+            updateChatHistoryList(channelId, name, type, lastMsg);
+            setTimeout(() => messageArea.scrollTop = messageArea.scrollHeight, 100);
+        } catch (error) {
+            messageArea.innerHTML = `<div class="text-center text-red-500">无法加载聊天记录: ${error.message}</div>`;
+        }
+    }
+    function displayMessage(message) {
+        const messageElement = document.createElement('div');
+        const isMyMessage = message.sender === currentUser.username;
+        const timestamp = message.timestamp ? new Date(message.timestamp) : new Date();
+        const timeString = `${timestamp.getHours().toString().padStart(2, '0')}:${timestamp.getMinutes().toString().padStart(2, '0')}`;
+
+        // Check if it's a private chat for simplified UI
+        if (activeChat && activeChat.type === 'private') {
+            // --- Private Chat UI (No avatar, no nickname) ---
+            messageElement.className = 'mb-2 flex w-full message-container fade-in';
+            messageElement.classList.add(isMyMessage ? 'justify-end' : 'justify-start');
+
+            let contentHTML = '';
+            const bubbleContainer = document.createElement('div');
+            bubbleContainer.className = 'max-w-[75%]';
+
+            if (message.type === 'FILE') {
+                contentHTML = `
+                    <a href="${API_BASE_URL}/api/files/download/${message.fileId}" target="_blank" class="flex items-center p-2 rounded-lg ${isMyMessage ? 'bg-blue-100 hover:bg-blue-200' : 'bg-white hover:bg-gray-50 shadow'}">
+                        <svg class="w-8 h-8 text-gray-500 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                        <div>
+                            <p class="font-semibold text-sm text-black truncate">${message.fileName}</p>
+                            <p class="text-xs text-gray-600">${formatFileSize(message.fileSize)}</p>
+                        </div>
+                    </a>
+                `;
+            } else {
+                contentHTML = `<div class="py-2 px-3 break-words rounded-lg ${isMyMessage ? 'bg-blue-500 text-white' : 'bg-white text-black shadow'}">${message.content}</div>`;
+            }
+
+            bubbleContainer.innerHTML = `
+                ${contentHTML}
+                <div class="text-xs text-gray-500 mt-1 ${isMyMessage ? 'text-right' : 'text-left'}">${timeString}</div>
+            `;
+            messageElement.appendChild(bubbleContainer);
+
+        } else {
+            // --- Group Chat UI (With avatar and nickname) ---
+            messageElement.className = 'mb-4 flex max-w-lg message-container fade-in';
+            const senderDisplayName = message.senderNickname || message.sender;
+            const placeholderAvatar = `https://placehold.co/40x40/E2E8F0/4A5568?text=${encodeURIComponent((senderDisplayName || '?').charAt(0))}`;
+
+            let contentHTML = '';
+            if (message.type === 'FILE') {
+                contentHTML = `
+                    <a href="${API_BASE_URL}/api/files/download/${message.fileId}" target="_blank" class="flex items-center p-2 rounded-md">
+                        <svg class="w-8 h-8 text-gray-500 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                        <div>
+                            <p class="font-semibold text-sm text-black truncate">${message.fileName}</p>
+                            <p class="text-xs text-gray-600">${formatFileSize(message.fileSize)}</p>
+                        </div>
+                    </a>`;
+            } else {
+                contentHTML = `<div class="py-2 px-3 break-words">${message.content}</div>`;
+            }
+
+            let bubbleClasses = '';
+            let fileLinkClasses = '';
+            if (isMyMessage) {
+                messageElement.classList.add('justify-end', 'ml-auto');
+                bubbleClasses = 'items-end order-1';
+                if (message.type !== 'FILE') { contentHTML = `<div class="py-2 px-3 break-words mr-2 bg-blue-500 rounded-bl-xl rounded-tl-xl rounded-tr-xl text-white">${message.content}</div>`; }
+                else { fileLinkClasses = 'bg-blue-100 hover:bg-blue-200'; }
+            } else {
+                messageElement.classList.add('justify-start');
+                bubbleClasses = 'items-start order-2';
+                if (message.type !== 'FILE') { contentHTML = `<div class="py-2 px-3 break-words bg-white rounded-br-xl rounded-tr-xl rounded-tl-xl text-black shadow">${message.content}</div>`; }
+                else { fileLinkClasses = 'bg-white hover:bg-gray-50 shadow'; }
+            }
+
+            messageElement.innerHTML = `
+                <img src="${getAvatarUrl(message.sender)}" onerror="this.onerror=null;this.src='${placeholderAvatar}'" class="w-10 h-10 rounded-full self-start object-cover ${isMyMessage ? 'ml-2 order-2' : 'mr-2 order-1'}">
+                <div class="flex flex-col ${bubbleClasses}">
+                    <div class="text-sm text-gray-600 mb-1">${senderDisplayName}</div>
+                    ${contentHTML}
+                    <div class="text-xs text-gray-500 mt-1">${timeString}</div>
+                </div>
+            `;
+
+            if (message.type === 'FILE') {
+                messageElement.querySelector('a').classList.add(...fileLinkClasses.split(' '));
+            }
+        }
+
+        messageArea.appendChild(messageElement);
+        messageArea.scrollTop = messageArea.scrollHeight;
+    }
+
+    // --- Friends & Rooms Logic ---
+    /**
+     * [MODIFIED] Fetches and displays the friend list.
+     * It now renders all friends as 'offline' by default. The actual status will be updated
+     * by the WebSocket connection to prevent flickering.
+     */
+    async function loadFriends() {
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/users/${currentUser.username}/friends`);
+            const friends = await response.json();
+            friendsList.innerHTML = friends.length === 0 ? '<p class="text-gray-500 text-center text-sm p-2">暂无好友</p>' : '';
+            friends.forEach(friend => {
+                const friendEl = document.createElement('div');
+                friendEl.className = 'p-2 hover:bg-gray-300 cursor-pointer rounded-md flex items-center';
+                friendEl.id = `friend-${friend.username}`;
+                friendEl.onclick = () => openChat(friend.username, friend.nickname, 'private');
+                // Always render as 'offline' initially. The WebSocket will provide the true status.
+                friendEl.innerHTML = `<span class="status-dot offline"></span><span class="font-semibold">${friend.nickname}</span><span class="text-sm text-gray-500 ml-2">(${friend.username})</span>`;
+                friendsList.appendChild(friendEl);
+            });
+            // The call to updateAllFriendStatuses() is removed from here to prevent the race condition.
+            // It's now called after the initial online list is received via WebSocket.
+        } catch (error) {
+            console.error("加载好友列表失败:", error);
+            friendsList.innerHTML = '<p class="text-red-500 text-center text-sm p-2">加载好友失败</p>';
+        }
+    }
+    function updateFriendStatus(username, isOnline) {
+        const friendEl = document.getElementById(`friend-${username}`);
+        if (friendEl) {
+            const dot = friendEl.querySelector('.status-dot');
+            dot.className = `status-dot ${isOnline ? 'online' : 'offline'}`;
+        }
+    }
+    function updateAllFriendStatuses() {
+        friendsList.querySelectorAll('[id^="friend-"]').forEach(el => {
+            const username = el.id.replace('friend-', '');
+            const isOnline = onlineUsers.has(username);
+            const dot = el.querySelector('.status-dot');
+            if (dot) dot.className = `status-dot ${isOnline ? 'online' : 'offline'}`;
+        });
+    }
+    async function searchUsers() {
+        const query = userSearchInput.value.trim();
+        if (query.length < 1) { userSearchResults.innerHTML = ''; return; }
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/users/search?query=${query}&currentUser=${currentUser.username}`);
+            const users = await response.json();
+            userSearchResults.innerHTML = users.length === 0 ? '<p class="text-gray-500 text-sm p-2">未找到用户</p>' : '';
+            users.forEach(user => {
+                const userEl = document.createElement('div');
+                userEl.className = 'p-2 flex justify-between items-center hover:bg-gray-100 rounded-md';
+                userEl.innerHTML = `<div><span class="font-medium">${user.nickname}</span><span class="text-sm text-gray-500">(${user.username})</span></div><button class="px-2 py-1 text-xs text-white bg-blue-500 rounded hover:bg-blue-600" onclick="sendFriendRequest('${user.username}', this)">添加</button>`;
+                userSearchResults.appendChild(userEl);
+            });
+        } catch (error) { console.error("搜索用户失败:", error); }
+    }
+    async function sendFriendRequest(addresseeUsername, button) {
+        button.disabled = true; button.textContent = '请求中...';
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/friends/request`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ requester: currentUser.username, addressee: addresseeUsername })
+            });
+            if (response.ok) {
+                showToast('好友请求已发送', 'success');
+                button.textContent = '已发送';
+                button.classList.replace('bg-blue-500', 'bg-gray-400');
+            } else { throw new Error(await response.text()); }
+        } catch (error) {
+            showToast(`请求失败: ${error.message}`, 'error');
+            button.disabled = false; button.textContent = '添加';
+        }
+    }
+    async function showFriendRequestsModal() {
+        manageFriendsModal.classList.remove('hidden');
+        friendNotificationBadge.classList.add('hidden');
+        await loadFriendRequests();
+    }
+    async function loadFriendRequests() {
+        friendRequestsContainer.innerHTML = '<p class="text-gray-500 text-center py-4">加载中...</p>';
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/friends/requests?username=${currentUser.username}`);
+            const requests = await response.json();
+            friendRequestsContainer.innerHTML = requests.length === 0 ? '<p class="text-gray-500 text-center py-4">没有待处理的请求</p>' : '';
+            requests.forEach(req => {
+                const reqEl = document.createElement('div');
+                reqEl.className = 'flex justify-between items-center p-3 border-b';
+                reqEl.innerHTML = `<div><p class="font-medium">${req.requesterNickname} (${req.requesterUsername})</p></div><div class="space-x-2"><button class="px-3 py-1 text-xs text-white bg-green-500 rounded" onclick="handleFriendRequestAction(${req.requestId}, 'accept', this)">同意</button><button class="px-3 py-1 text-xs text-white bg-red-500 rounded" onclick="handleFriendRequestAction(${req.requestId}, 'reject', this)">拒绝</button></div>`;
+                friendRequestsContainer.appendChild(reqEl);
+            });
+        } catch (error) {
+            friendRequestsContainer.innerHTML = '<p class="text-red-500 text-center py-4">加载请求失败</p>';
+        }
+    }
+    async function handleFriendRequestAction(requestId, action, button) {
+        const buttonContainer = button.parentElement;
+        buttonContainer.innerHTML = `<span class="text-sm text-gray-500">处理中...</span>`;
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/friends/requests/${requestId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action })
+            });
+            if (!response.ok) throw new Error(await response.text());
+            showToast(`请求已${action === 'accept' ? '同意' : '拒绝'}`, 'success');
+            await loadFriendRequests();
+            await checkForPendingRequests();
+        } catch (error) {
+            showToast(`操作失败: ${error.message}`, 'error');
+            await loadFriendRequests();
+        }
+    }
+    async function checkForPendingRequests() {
+        try {
+            const friendRes = await fetch(`${API_BASE_URL}/api/friends/requests?username=${currentUser.username}`);
+            friendNotificationBadge.classList.toggle('hidden', (await friendRes.json()).length === 0);
+            const roomRes = await fetch(`${API_BASE_URL}/api/rooms/requests?ownerUsername=${currentUser.username}`);
+            roomNotificationBadge.classList.toggle('hidden', (await roomRes.json()).length === 0);
+        } catch (error) { console.error("检查待处理请求失败:", error); }
+    }
+    async function createRoom() {
+        const roomName = document.getElementById('new-room-name').value.trim();
+        if (!roomName) { showToast('请输入聊天室名称', 'error'); return; }
+        confirmCreateRoomBtn.disabled = true;
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/rooms`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: roomName, owner: currentUser.username })
+            });
+            if (response.ok) {
+                showToast('聊天室创建成功!', 'success');
+                createRoomModal.classList.add('hidden');
+                document.getElementById('new-room-name').value = '';
+            } else { throw new Error(await response.text()); }
+        } catch (error) {
+            showToast(`创建失败: ${error.message}`, 'error');
+        } finally {
+            confirmCreateRoomBtn.disabled = false;
+        }
+    }
+    async function loadChatRooms() {
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/rooms`);
+            const rooms = await response.json();
+            chatRoomsList.innerHTML = rooms.length === 0 ? '<p class="text-gray-500 text-center text-sm p-2">暂无公共聊天室</p>' : '';
+            rooms.forEach(room => {
+                const roomElement = document.createElement('div');
+                const roomId = `room-${room.id}`;
+                roomElement.className = 'p-2 rounded-md flex justify-between items-center hover:bg-gray-300';
+                roomElement.dataset.roomId = roomId;
+                roomElement.dataset.roomName = room.name;
+                roomElement.dataset.ownerUsername = room.ownerUsername;
+                const isOwner = currentUser.username === room.ownerUsername;
+                const roomInfoDiv = document.createElement('div');
+                roomInfoDiv.className = 'flex-grow cursor-pointer';
+                roomInfoDiv.onclick = () => openChat(roomId, room.name, 'group');
+                roomInfoDiv.innerHTML = `<div class="font-semibold">${room.name}</div><div class="text-xs text-gray-500">房主: ${room.ownerNickname}</div>`;
+                const buttonsDiv = document.createElement('div');
+                buttonsDiv.className = 'flex items-center space-x-1';
+                roomElement.appendChild(roomInfoDiv);
+                roomElement.appendChild(buttonsDiv);
+                chatRoomsList.appendChild(roomElement);
+                updateRoomButtons(room.id, buttonsDiv, isOwner);
+            });
+        } catch (error) {
+            console.error("加载聊天室列表失败:", error);
+            chatRoomsList.innerHTML = '<p class="text-red-500 text-center text-sm p-2">加载聊天室失败</p>';
+        }
+    }
+    async function updateRoomButtons(roomId, buttonContainer, isOwner) {
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/rooms/${roomId}/is-member?username=${currentUser.username}`);
+            const { isMember } = await res.json();
+            let buttonHtml = isMember ? `<button class="flex-shrink-0 px-2 py-1 text-xs text-white bg-green-500 rounded-md" disabled>已加入</button>` : `<button class="flex-shrink-0 px-2 py-1 text-xs text-white bg-blue-500 rounded-md" onclick="event.stopPropagation(); requestToJoinRoom(${roomId}, this)">申请</button>`;
+            const deleteButtonHtml = isOwner ? `<button class="flex-shrink-0 px-2 py-1 text-xs text-white bg-red-600 rounded-md" onclick="event.stopPropagation(); deleteRoom(${roomId})">删除</button>` : '';
+            buttonContainer.innerHTML = buttonHtml + deleteButtonHtml;
+        } catch (error) {
+            console.error(`Failed to get membership status for room ${roomId}`, error);
+            buttonContainer.innerHTML = `<button class="flex-shrink-0 px-2 py-1 text-xs text-white bg-gray-400 rounded-md" disabled>错误</button>`;
+        }
+    }
+    async function requestToJoinRoom(roomId, button) {
+        button.disabled = true; button.textContent = '...';
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/rooms/${roomId}/join`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: currentUser.username })
+            });
+            if (response.ok) {
+                showToast('加入请求已发送', 'success');
+                button.textContent = '待审批';
+                button.classList.replace('bg-blue-500', 'bg-gray-400');
+            } else { throw new Error(await response.text()); }
+        } catch (error) {
+            showToast(`请求失败: ${error.message}`, 'error');
+            button.disabled = false; button.textContent = '申请';
+        }
+    }
+    async function showManageRoomsModal() {
+        manageRoomsModal.classList.remove('hidden');
+        roomNotificationBadge.classList.add('hidden');
+        await loadRoomRequests();
+    }
+    async function loadRoomRequests() {
+        joinRequestsContainer.innerHTML = '<p class="text-gray-500 text-center py-4">加载中...</p>';
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/rooms/requests?ownerUsername=${currentUser.username}`);
+            const requests = await response.json();
+            joinRequestsContainer.innerHTML = requests.length === 0 ? '<p class="text-gray-500 text-center py-4">没有待处理的请求</p>' : '';
+            requests.forEach(req => {
+                const reqEl = document.createElement('div');
+                reqEl.className = 'flex justify-between items-center p-3 border-b';
+                reqEl.innerHTML = `<div><p class="font-medium">${req.requesterNickname} 申请加入 ${req.roomName}</p></div><div class="space-x-2"><button class="px-3 py-1 text-xs text-white bg-green-500 rounded" onclick="handleRoomRequestAction(${req.requestId}, 'approve', this)">同意</button><button class="px-3 py-1 text-xs text-white bg-red-500 rounded" onclick="handleRoomRequestAction(${req.requestId}, 'reject', this)">拒绝</button></div>`;
+                joinRequestsContainer.appendChild(reqEl);
+            });
+        } catch (error) {
+            joinRequestsContainer.innerHTML = '<p class="text-red-500 text-center py-4">加载请求失败</p>';
+        }
+    }
+    async function handleRoomRequestAction(requestId, action, button) {
+        const buttonContainer = button.parentElement;
+        buttonContainer.innerHTML = `<span class="text-sm text-gray-500">...</span>`;
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/rooms/requests/${requestId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action })
+            });
+            if (!response.ok) throw new Error(await response.text());
+            showToast(`请求已${action === 'approve' ? '同意' : '拒绝'}`, 'success');
+            await loadRoomRequests();
+            await checkForPendingRequests();
+        } catch (error) {
+            showToast(`操作失败: ${error.message}`, 'error');
+            await loadRoomRequests();
+        }
+    }
+    async function deleteRoom(roomId) {
+        if (!confirm(`确定要删除这个聊天室吗？此操作不可逆。`)) return;
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/rooms/${roomId}?username=${currentUser.username}`, { method: 'DELETE' });
+            if (response.ok) {
+                showToast('聊天室已删除', 'success');
+                if (activeChat && activeChat.id === `room-${roomId}`) {
+                    chatArea.classList.add('hidden');
+                    chatWelcome.classList.remove('hidden');
+                    activeChat = null;
+                }
+            } else { throw new Error(await response.text()); }
+        } catch (error) { showToast(`删除失败: ${error.message}`, 'error'); }
+    }
+
+    // --- Settings & Password Reset ---
+    document.getElementById('fp-next-step1').addEventListener('click', async () => {
+        const username = document.getElementById('fp-username').value.trim();
+        const errorEl = document.getElementById('fp-error');
+        if (!username) { errorEl.textContent = '请输入用户名'; return; }
+        errorEl.textContent = '';
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/auth/security-question?username=${username}`);
+            if (!res.ok) throw new Error('用户不存在或无法获取问题');
+            const data = await res.json();
+            document.getElementById('fp-question').textContent = data.question;
+            document.getElementById('fp-step1').classList.add('hidden');
+            document.getElementById('fp-step2').classList.remove('hidden');
+        } catch (e) { errorEl.textContent = e.message; }
+    });
+    document.getElementById('fp-submit').addEventListener('click', async () => {
+        const username = document.getElementById('fp-username').value.trim();
+        const answer = document.getElementById('fp-answer').value.trim();
+        const newPassword = document.getElementById('fp-new-password').value.trim();
+        const errorEl = document.getElementById('fp-error');
+        if (!answer || !newPassword) { errorEl.textContent = '请填写所有字段'; return; }
+        errorEl.textContent = '';
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/auth/reset-password`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, answer, newPassword })
+            });
+            const message = await res.text();
+            if (!res.ok) throw new Error(message);
+            showToast(message, 'success');
+            forgotPasswordModal.classList.add('hidden');
+        } catch (e) { errorEl.textContent = e.message; }
+    });
+    async function showSettingsModal() {
+        settingsModal.classList.remove('hidden');
+        // Default to account tab
+        settingsModal.querySelector('.tab-button.active')?.classList.remove('active');
+        document.querySelector('.tab-button[data-tab="account"]').classList.add('active');
+        settingsModal.querySelectorAll('[id^="tab-content-"]').forEach(content => content.classList.add('hidden'));
+        document.getElementById('tab-content-account').classList.remove('hidden');
+
+        const avatarPreview = document.getElementById('settings-avatar-preview');
+        avatarPreview.src = getAvatarUrl(currentUser.username);
+        avatarPreview.onerror = () => { avatarPreview.src = `https://placehold.co/80x80/E2E8F0/4A5568?text=${currentUser.nickname.charAt(0)}`; };
+    }
+    settingsModal.querySelectorAll('.tab-button').forEach(button => {
+        button.addEventListener('click', () => {
+            const tab = button.dataset.tab;
+            settingsModal.querySelector('.tab-button.active').classList.remove('active');
+            button.classList.add('active');
+            settingsModal.querySelectorAll('[id^="tab-content-"]').forEach(content => content.classList.add('hidden'));
+            document.getElementById(`tab-content-${tab}`).classList.remove('hidden');
+
+            if (tab === 'friends') { loadFriendsForSettings(); }
+            if (tab === 'groups') { loadGroupsForSettings(); }
+        });
+    });
+    document.getElementById('settings-update-avatar').addEventListener('click', async () => {
+        const fileInput = document.getElementById('settings-avatar-input');
+        if (fileInput.files.length === 0) { showToast('请先选择一个文件', 'error'); return; }
+        const formData = new FormData();
+        formData.append('username', currentUser.username);
+        formData.append('avatar', fileInput.files[0]);
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/users/update/avatar`, { method: 'POST', body: formData });
+            if (!res.ok) throw new Error(await res.text());
+            showToast('头像更新成功!', 'success');
+            document.getElementById('settings-avatar-preview').src = getAvatarUrl(currentUser.username);
+            // Force reload main page avatar if any
+        } catch (e) { showToast(`更新失败: ${e.message}`, 'error'); }
+    });
+    document.getElementById('change-password-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const oldPassword = document.getElementById('old-password').value;
+        const newPassword = document.getElementById('new-password').value;
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/users/update/password`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: currentUser.username, oldPassword, newPassword })
+            });
+            const message = await res.text();
+            if (!res.ok) throw new Error(message);
+            showToast(message, 'success');
+            e.target.reset();
+        } catch (e) { showToast(`修改失败: ${e.message}`, 'error'); }
+    });
+    async function loadFriendsForSettings() {
+        const listEl = document.getElementById('settings-friends-list');
+        listEl.innerHTML = '加载中...';
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/users/${currentUser.username}/friends`);
+            const friends = await response.json();
+            listEl.innerHTML = friends.length === 0 ? '<p class="text-gray-500 text-center text-sm p-2">暂无好友</p>' : '';
+            friends.forEach(friend => {
+                const friendEl = document.createElement('div');
+                friendEl.className = 'p-3 border-b flex justify-between items-center';
+                friendEl.innerHTML = `
+                    <div>
+                        <p class="font-semibold">${friend.nickname}</p>
+                        <p class="text-sm text-gray-500">(${friend.username})</p>
+                    </div>
+                    <div class="space-x-2">
+                        <button class="px-3 py-1 text-xs bg-yellow-500 text-white rounded" onclick="deletePrivateChatHistory('${friend.username}', '${friend.nickname}')">清空记录</button>
+                        <button class="px-3 py-1 text-xs bg-red-600 text-white rounded" onclick="deleteFriend('${friend.username}', this)">删除好友</button>
+                    </div>
+                `;
+                listEl.appendChild(friendEl);
+            });
+        } catch (e) { listEl.innerHTML = '加载好友列表失败'; }
+    }
+    async function deleteFriend(friendUsername, button) {
+        if (!confirm(`确定要删除好友 ${friendUsername} 吗？`)) return;
+        button.disabled = true; button.textContent = '...';
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/friends?username=${currentUser.username}&friendUsername=${friendUsername}`, { method: 'DELETE' });
+            if (!res.ok) throw new Error(await res.text());
+            showToast('好友已删除', 'success');
+            button.closest('.p-3.border-b').remove(); // Remove the friend from settings list
+            loadFriends(); // Reload main friends list
+        } catch (e) {
+            showToast(`删除失败: ${e.message}`, 'error');
+            button.disabled = false; button.textContent = '删除好友';
+        }
+    }
+    async function deletePrivateChatHistory(friendUsername, friendNickname) {
+        if (!confirm(`您确定要清空与【${friendNickname}】的聊天记录吗？此操作不可恢复！`)) return;
+
+        const users = [currentUser.username, friendUsername].sort();
+        const channelId = `private-${users[0]}-${users[1]}`;
+        const url = `${API_BASE_URL}/api/history/private/${channelId}?username=${currentUser.username}`;
+
+        try {
+            const response = await fetch(url, { method: 'DELETE' });
+            if (response.ok) {
+                showToast('私聊记录已清空。', 'success');
+                const historyItem = document.getElementById(`history-${channelId}`);
+                if (historyItem) {
+                    historyItem.remove();
+                    saveRecentChats();
+                }
+                if (activeChat && activeChat.id === channelId) {
+                    messageArea.innerHTML = '';
+                }
+            } else { throw new Error(await response.text()); }
+        } catch (error) { showToast(`操作失败: ${error.message}`, 'error'); }
+    }
+
+    // --- NEW: Group Management in Settings ---
+    async function loadGroupsForSettings() {
+        const listEl = document.getElementById('settings-groups-list');
+        listEl.innerHTML = '加载中...';
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/rooms`);
+            if (!response.ok) throw new Error('无法获取群聊列表');
+            const allRooms = await response.json();
+
+            const myRooms = [];
+            for (const room of allRooms) {
+                const res = await fetch(`${API_BASE_URL}/api/rooms/${room.id}/is-member?username=${currentUser.username}`);
+                const { isMember } = await res.json();
+                if (isMember) {
+                    myRooms.push(room);
+                }
+            }
+
+            if (myRooms.length === 0) {
+                listEl.innerHTML = '<p class="text-gray-500 text-center text-sm p-2">您没有加入任何群聊</p>';
+                return;
+            }
+
+            listEl.innerHTML = ''; // Clear loading text
+            myRooms.forEach(room => {
+                const roomEl = document.createElement('div');
+                roomEl.className = 'p-3 border-b flex justify-between items-center';
+                const isOwner = room.ownerUsername === currentUser.username;
+
+                let buttonsHTML = '';
+                if (isOwner) {
+                    buttonsHTML = `
+                        <button class="px-3 py-1 text-xs bg-yellow-500 text-white rounded" onclick="deleteGroupChatHistory(${room.id}, '${room.name}')">清空记录</button>
+                        <button class="px-3 py-1 text-xs bg-red-600 text-white rounded" onclick="deleteRoomForSettings(${room.id}, this)">删除群聊</button>
+                    `;
+                } else {
+                    buttonsHTML = `
+                        <button class="px-3 py-1 text-xs bg-red-500 text-white rounded" onclick="leaveGroup(${room.id}, this)">退出群聊</button>
+                    `;
+                }
+
+                roomEl.innerHTML = `
+                    <div>
+                        <p class="font-semibold">${room.name}</p>
+                        <p class="text-xs text-gray-500">房主: ${room.ownerNickname}</p>
+                    </div>
+                    <div class="space-x-2">${buttonsHTML}</div>
+                `;
+                listEl.appendChild(roomEl);
+            });
+
+        } catch (e) {
+            listEl.innerHTML = '加载群聊列表失败';
+            console.error("Failed to load groups for settings:", e);
+        }
+    }
+    async function deleteGroupChatHistory(roomId, roomName) {
+        if (!confirm(`您确定要清空群聊【${roomName}】的所有聊天记录吗？此操作不可恢复！`)) return;
+
+        const url = `${API_BASE_URL}/api/rooms/${roomId}/history?username=${currentUser.username}`;
+        try {
+            const response = await fetch(url, { method: 'DELETE' });
+            if (response.ok) {
+                showToast('群聊记录已清空。', 'success');
+                if (activeChat && activeChat.id === `room-${roomId}`) {
+                    messageArea.innerHTML = '';
+                }
+            } else { throw new Error(await response.text()); }
+        } catch (error) { showToast(`操作失败: ${error.message}`, 'error'); }
+    }
+    async function deleteRoomForSettings(roomId, button) {
+        if (!confirm(`确定要删除这个聊天室吗？此操作不可逆。`)) return;
+        button.disabled = true;
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/rooms/${roomId}?username=${currentUser.username}`, { method: 'DELETE' });
+            if (response.ok) {
+                showToast('聊天室已删除', 'success');
+                button.closest('.p-3.border-b').remove();
+                if (activeChat && activeChat.id === `room-${roomId}`) {
+                    chatArea.classList.add('hidden');
+                    chatWelcome.classList.remove('hidden');
+                    activeChat = null;
+                }
+            } else { throw new Error(await response.text()); }
+        } catch (error) {
+            showToast(`删除失败: ${error.message}`, 'error');
+            button.disabled = false;
+        }
+    }
+    /**
+     * [MODIFIED] This function now reloads the main chat room list after a user leaves a group.
+     */
+    async function leaveGroup(roomId, button) {
+        if (!confirm('确定要退出这个群聊吗？')) return;
+        button.disabled = true;
+        try {
+            // Note: This requires a backend endpoint like: DELETE /api/rooms/{roomId}/leave
+            const response = await fetch(`${API_BASE_URL}/api/rooms/${roomId}/leave?username=${currentUser.username}`, { method: 'DELETE' });
+            if (response.ok) {
+                showToast('已成功退出群聊', 'success');
+                button.closest('.p-3.border-b').remove();
+                // Reload the main chat rooms list to reflect the change
+                loadChatRooms();
+            } else {
+                throw new Error(await response.text() || '退出失败');
+            }
+        } catch (error) {
+            showToast(`操作失败: ${error.message}`, 'error');
+            button.disabled = false;
+        }
+    }
+</script>
+</body>
+</html>
