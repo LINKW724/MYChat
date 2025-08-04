@@ -1,0 +1,1444 @@
+<!DOCTYPE html>
+
+<html lang="zh-CN">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <script src="js/pinyin-pro.js"></script>
+
+    <title>Chat App - V2.2</title>
+
+    <style>
+
+        /* General Setup */
+
+        * { box-sizing: border-box; }
+
+        body, html { margin: 0; padding: 0; height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; overflow-x: hidden;}
+
+        .app-container { display: flex; height: 100%; }
+
+        .nav-bar { width: 60px; background-color: #f0f0f0; padding-top: 20px; display: flex; flex-direction: column; align-items: center; border-right: 1px solid #dcdcdc; flex-shrink: 0; }
+
+        .nav-button { margin-bottom: 20px; cursor: pointer; padding: 8px; border-radius: 8px; transition: background-color 0.2s; }
+
+        .nav-button:hover { background-color: #dcdcdc; }
+
+        .nav-button.active { background-color: #c7c7c7; }
+
+
+
+        /* Right Content Panel */
+
+        .content-panel {
+
+            flex-grow: 1;
+
+            padding: 30px;
+
+            overflow-y: auto;
+
+        }
+
+        .panel {
+
+            display: none !important; /* 默认使用最高优先级强制隐藏所有面板 */
+
+        }
+
+        .panel.active {
+
+            display: block !important; /* 只显示被JavaScript标记为'active'的面板 */
+
+            height: 100%;
+
+            padding: 30px; /* 将内边距移到这里 */
+
+            overflow-y: auto;
+
+        }
+
+        #chats-panel.active {
+
+            padding: 0; /* 聊天面板特殊处理，不需要内边距 */
+
+        }
+
+        .panel.active {
+
+            display: block;
+
+        }
+
+
+
+        /* "Me" Page Profile Styles */
+
+        .profile-card {
+
+            display: flex;
+
+            align-items: center;
+
+            gap: 20px;
+
+            padding-bottom: 20px;
+
+            border-bottom: 1px solid #eee;
+
+        }
+
+        .profile-avatar {
+
+            width: 80px;
+
+            height: 80px;
+
+            border-radius: 50%;
+
+            object-fit: cover;
+
+            background-color: #ddd;
+
+        }
+
+        .profile-info h3 {
+
+            margin: 0 0 5px 0;
+
+            font-size: 24px;
+
+        }
+
+        .profile-info p {
+
+            margin: 0;
+
+            color: #666;
+
+            font-size: 14px;
+
+        }
+
+        .actions {
+
+            margin-top: 20px;
+
+        }
+
+        .actions a,
+
+        .actions button {
+
+            display: inline-block;
+
+            margin-right: 15px;
+
+            text-decoration: none;
+
+            color: #007bff;
+
+            cursor: pointer;
+
+            font-size: 14px;
+
+        }
+
+        #logout-button {
+
+            padding: 8px 15px;
+
+            border: 1px solid #ccc;
+
+            background-color: #f7f7f7;
+
+            border-radius: 5px;
+
+        }
+
+
+
+        /* Modal Styles (for Change Password) */
+
+        .modal-overlay {
+
+            display: none; /* Hidden by default */
+
+            position: fixed;
+
+            top: 0;
+
+            left: 0;
+
+            width: 100%;
+
+            height: 100%;
+
+            background-color: rgba(0, 0, 0, 0.5);
+
+            justify-content: center;
+
+            align-items: center;
+
+            z-index: 1000;
+
+        }
+
+        .modal-content {
+
+            background-color: white;
+
+            padding: 30px 40px;
+
+            border-radius: 8px;
+
+            width: 100%;
+
+            max-width: 400px;
+
+            position: relative;
+
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+
+        }
+
+        .close-button {
+
+            position: absolute;
+
+            top: 10px;
+
+            right: 15px;
+
+            font-size: 28px;
+
+            font-weight: bold;
+
+            color: #aaa;
+
+            cursor: pointer;
+
+        }
+
+        .close-button:hover {
+
+            color: #333;
+
+        }
+
+        .modal-content h2 {
+
+            text-align: center;
+
+            margin-top: 0;
+
+        }
+
+        .modal-content .form-group {
+
+            text-align: left;
+
+            margin-bottom: 15px;
+
+        }
+
+        .modal-content label {
+
+            display: block;
+
+            margin-bottom: 5px;
+
+        }
+
+        .modal-content input {
+
+            width: 100%;
+
+            padding: 10px;
+
+            border: 1px solid #ccc;
+
+            border-radius: 4px;
+
+        }
+
+        .modal-content button {
+
+            width: 100%;
+
+            padding: 12px;
+
+            background-color: #007bff;
+
+            color: white;
+
+            border: none;
+
+            border-radius: 4px;
+
+            cursor: pointer;
+
+            margin-top: 10px;
+
+        }
+
+        .modal-content .feedback {
+
+            color: red;
+
+            text-align: center;
+
+            margin-top: 10px;
+
+            height: 15px;
+
+        }
+
+        .verification-choice {
+
+            text-align: center;
+
+            margin: 15px 0;
+
+            font-size: 14px;
+
+        }
+
+        .verification-choice a {
+
+            color: #007bff;
+
+            text-decoration: none;
+
+            padding: 5px;
+
+            cursor: pointer;
+
+        }
+
+        .verification-choice a.active {
+
+            font-weight: bold;
+
+            text-decoration: underline;
+
+        }
+
+        .question-display {
+
+            padding: 10px;
+
+            background-color: #f7f7f7;
+
+            border: 1px solid #eee;
+
+            border-radius: 4px;
+
+            color: #333;
+
+            min-height: 18px;
+
+            margin-bottom: 15px;
+
+        }
+
+        .message-meta {
+            /* 1. 调小字体，大约为原来的一半 */
+            font-size: 0.75em; /* 或者 9px，视觉上更协调 */
+            color: rgba(0, 0, 0, 0.5);
+            margin-top: 5px;
+
+            /* 2. 禁用文本选中(您之前已有，这里是确认) */
+            user-select: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+        }
+
+        /* 3. 我方消息的时间戳，强制推到右侧 */
+        .mine .message-meta {
+            align-self: flex-end;
+        }
+
+
+
+
+
+        /* Contact Panel Styles */
+
+        #contacts-panel { display: flex; flex-direction: column; height: 100%; }
+
+        .contacts-header { padding-bottom: 15px; border-bottom: 1px solid #eee; }
+
+        #search-users-input { width: 100%; padding: 10px; font-size: 16px; border-radius: 6px; border: 1px solid #ccc; }
+
+        #friend-requests-section { padding: 10px 0; }
+
+        #friend-requests-list li, #contact-list li { display: flex; align-items: center; padding: 8px; border-radius: 6px; }
+
+        #contact-list li:hover { background-color: #f0f0f0; cursor: pointer; }
+
+        .contact-avatar { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; }
+
+        .contact-name { flex-grow: 1; }
+
+        .contact-list-wrapper { display: flex; flex-grow: 1; overflow-y: hidden; }
+
+        #contact-list { flex-grow: 1; list-style: none; padding: 0; margin: 0; overflow-y: auto; }
+
+        #az-indexer { display: flex; flex-direction: column; justify-content: center; padding: 0 10px; }
+
+        #az-indexer a { text-decoration: none; color: #007bff; padding: 2px 0; font-size: 12px; }
+
+
+
+        /* Search and Friend Request Styles */
+
+        .search-result-item, .friend-request-item { display: flex; align-items: center; padding: 8px; margin: 4px 0; }
+
+        .search-result-item button, .request-actions button { margin-left: auto; padding: 4px 8px; font-size: 12px; cursor: pointer; border: 1px solid #ccc; border-radius: 4px; }
+
+        .request-actions button { margin-left: 5px; }
+
+        .btn-accept { background-color: #28a745; color: white; border-color: #28a745; }
+
+        #search-results-container { max-height: 150px; overflow-y: auto; border: 1px solid #eee; margin-top: 5px; }
+
+        .contact-group h4 { background-color: #f7f7f7; padding: 4px 8px; margin: 10px 0 0 0; }
+
+        /* Context Menu Styles */
+
+        .context-menu { display: none; position: fixed; background: white; border: 1px solid #ccc; box-shadow: 0 2px 10px rgba(0,0,0,0.1); z-index: 1001; }
+
+        .context-menu ul { list-style: none; padding: 5px 0; margin: 0; }
+
+        .context-menu ul li { padding: 8px 15px; cursor: pointer; }
+
+        .context-menu ul li:hover { background: #f0f0f0; }
+
+        /* Responsive Layout for Mobile */
+
+        @media (max-width: 768px) {
+
+            .app-container {
+
+                flex-direction: column; /* Vertical layout */
+
+            }
+
+            .nav-bar {
+
+                flex-direction: row; /* Horizontal buttons */
+
+                justify-content: space-around;
+
+                align-items: center;
+
+                width: 100%;
+
+                height: 60px;
+
+                padding-top: 0;
+
+                border-right: none;
+
+                border-bottom: 1px solid #dcdcdc;
+
+                order: 1; /* Puts the nav bar at the bottom */
+
+            }
+
+            .nav-button {
+
+                margin-bottom: 0;
+
+            }
+
+            .content-panel {
+
+                padding: 15px;
+
+                order: 0; /* Puts the content area at the top */
+
+            }
+
+            .profile-card {
+
+                flex-direction: column; /* Stacks avatar and info vertically */
+
+                align-items: center;
+
+                text-align: center;
+
+                gap: 10px;
+
+            }
+
+            .profile-avatar {
+
+                width: 80px;
+
+                height: 80px;
+
+            }
+
+            .profile-info h3 {
+
+                font-size: 22px;
+
+            }
+
+        }
+
+        /* Chat Panel Styles */
+
+        /* Chat Panel Styles */
+        .chat-list li { display: flex; align-items: center; padding: 10px; border-bottom: 1px solid #f0f0f0; cursor: pointer; }
+        .chat-list li:hover { background-color: #f7f7f7; }
+        .chat-window { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
+        .chat-header {
+            display: flex;
+            align-items: center;
+            padding: 10px 15px;
+            font-weight: bold;
+            border-bottom: 1px solid #ccc;
+            flex-shrink: 0;
+        }
+        .chat-header .back-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 5px;
+            margin-right: 10px;
+            display: none; /* 默认桌面端不显示，移动端显示 */
+        }
+        .chat-header .chat-title {
+            flex-grow: 1;
+            text-align: center;
+            /* 确保标题不会太靠左 */
+            margin-right: -40px; /* 抵消返回按钮的宽度 */
+            padding-left: 40px;
+        }
+        .message-list { flex-grow: 1; padding: 10px; overflow-y: auto; word-wrap: break-word; word-break: break-all; }
+        .message-list li { display: flex; margin-bottom: 10px; }
+        .message-list .mine { justify-content: flex-end; }
+        .message-list .theirs { justify-content: flex-start; }
+        .message-bubble {
+            padding: 10px 14px;
+            max-width: 75%;
+            word-wrap: break-word;
+            font-size: 16px;
+            line-height: 1.4;
+            color: #000;
+        }
+        .mine .message-bubble { border-radius: 20px 20px 5px 20px; background-color: #dcf8c6; }
+        .theirs .message-bubble { border-radius: 20px 20px 20px 5px; background-color: #e1f4fd; }
+        /* 针对消息已读状态的覆盖 */
+        .mine-unread .message-bubble { background-color: #f0f0f0; }
+
+        .chat-input-area {
+            display: flex;
+            align-items: flex-end;
+            padding: 8px 12px;
+            border-top: 1px solid #ccc;
+            background-color: #f7f7f7;
+            flex-shrink: 0;
+        }
+        .chat-icon-btn { background: none; border: none; cursor: pointer; padding: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .chat-icon-btn .icon { width: 24px; height: 24px; color: #555; }
+        .input-container {
+            flex-grow: 1;
+            margin: 0 8px;
+            display: flex;
+            background-color: #fff;
+            border: 1px solid #ddd;
+            border-radius: 20px;
+            padding: 6px 12px;
+        }
+        #chat-message-input {
+            flex-grow: 1;
+            border: none;
+            background: transparent;
+            padding: 0;
+            margin: 0;
+            resize: none;
+            line-height: 1.5;
+            max-height: 90px;
+            overflow-y: auto;
+            font-size: 16px;
+            outline: none;
+        }
+        .send-btn {
+            background-color: rgba(31, 111, 198, 0.2);
+            border: none;
+            border-radius: 50%;
+            width: 36px;
+            height: 36px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            flex-shrink: 0;
+            transition: background-color 0.2s;
+        }
+        .send-btn:hover { background-color: rgba(0, 86, 179, 0.61); }
+        .send-btn .icon { width: 20px; height: 20px; fill: white; }
+
+        /* V2.3: 在线状态指示器样式 */
+        .contact-avatar-wrapper, .chat-avatar-wrapper { position: relative; width: 40px; height: 40px; margin-right: 12px; }
+        .contact-item .contact-avatar, .chat-item .contact-avatar { width: 40px; height: 40px; }
+        .status-indicator { position: absolute; bottom: 0; right: 0; width: 12px; height: 12px; border-radius: 50%; border: 2px solid white; }
+        .status-online { background-color: #28a745; }
+        .status-offline { background-color: #888; }
+        .chat-header-status { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-left: 8px; vertical-align: middle; }
+
+        /* 移动端特殊样式 */
+        @media (max-width: 768px) {
+            .chat-header .back-btn { display: inline-block; }
+            .chat-header .chat-title { margin-right: 0; padding-left: 0; }
+        }
+
+    </style>
+
+</head>
+
+<body>
+
+<div class="app-container">
+
+    <div class="nav-bar">
+
+        <div id="nav-me" class="nav-button active" onclick="switchPanel('me')">
+
+            <img src="assets/icons/me.svg" alt="我">
+
+        </div>
+
+        <div id="nav-contacts" class="nav-button" onclick="switchPanel('contacts')">
+
+            <img src="assets/icons/contacts.svg" alt="通讯录">
+
+        </div>
+
+        <div id="nav-chats" class="nav-button" onclick="switchPanel('chats')">
+
+            <img src="assets/icons/chats.svg" alt="聊天室">
+
+        </div>
+
+    </div>
+
+
+
+    <div class="content-panel">
+
+
+
+        <div id="me-panel" class="panel active">
+
+            <h2 id="me-panel-title">我</h2>
+
+            <div class="profile-card">
+
+                <img id="profile-avatar" class="profile-avatar" src="" alt="avatar">
+
+                <div class="profile-info">
+
+                    <h3 id="profile-nickname">加载中...</h3>
+
+                    <p id="profile-account"></p>
+
+                </div>
+
+            </div>
+
+            <div class="actions">
+
+                <a href="#" id="change-password-link">修改密码</a>
+
+                <button id="logout-button">退出登录</button>
+
+            </div>
+
+            <div id="friend-requests-section" style="display: none;">
+
+                <h4>通知</h4>
+
+                <ul id="friend-requests-list">
+
+                </ul>
+
+                <hr style="margin: 20px 0;">
+
+            </div>
+
+        </div>
+
+
+
+        <div id="contacts-panel" class="panel">
+
+            <div class="contacts-header">
+
+                <input type="text" id="search-users-input" placeholder="按账号/昵称搜索用户...">
+
+                <div id="search-results-container" style="display: none;">
+
+                </div>
+
+            </div>
+
+            <div class="contact-list-wrapper">
+
+                <ul id="contact-list">
+
+                </ul>
+
+                <div id="az-indexer">
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+
+        <div id="chats-panel" class="panel">
+
+            <div id="chat-list-view">
+
+                <h2>聊天</h2>
+
+                <ul id="chat-room-list" class="chat-list">
+
+                </ul>
+
+            </div>
+
+            <div id="chat-window-container" class="chat-window" style="display: none;">
+                <div class="chat-header">
+                    <button class="back-btn" onclick="closeChatWindow()">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+                    </button>
+                    <div id="chat-window-title" class="chat-title">
+                    </div>
+                </div>
+                <ul id="message-list" class="message-list"></ul>
+                <div id="attachment-menu" class="attachment-menu" style="display: none;">
+                    <button>图片</button>
+                    <button>文件</button>
+                </div>
+                <div class="chat-input-area">
+                    <button id="attachment-btn" class="chat-icon-btn">
+                        <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+                    </button>
+                    <div class="input-container">
+                        <textarea id="chat-message-input" placeholder="输入消息..." rows="1"></textarea>
+                    </div>
+                    <button id="send-chat-message-btn" class="send-btn">
+                        <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+                    </button>
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+
+<div id="password-modal" class="modal-overlay">
+
+    <div class="modal-content">
+
+        <span class="close-button">&times;</span>
+
+        <h2>修改密码</h2>
+
+        <div class="verification-choice">
+
+            <a href="#" id="verify-by-password" class="active">使用旧密码验证</a> |
+
+            <a href="#" id="verify-by-question">使用安全问题验证</a>
+
+        </div>
+
+        <form id="change-password-form">
+
+            <div id="password-fields">
+
+                <div class="form-group">
+
+                    <label for="old-password">当前密码</label>
+
+                    <input type="password" id="old-password" name="oldPassword">
+
+                </div>
+
+            </div>
+
+            <div id="question-fields" style="display: none;">
+
+                <div class="form-group">
+
+                    <label>您的安全问题是：</label>
+
+                    <div id="user-question-display" class="question-display">加载中...</div>
+
+                </div>
+
+                <div class="form-group">
+
+                    <label for="modal-answer">请输入您的答案</label>
+
+                    <input type="text" id="modal-answer" name="answer">
+
+                </div>
+
+            </div>
+
+            <hr>
+
+            <div class="form-group">
+
+                <label for="new-password">新密码</label>
+
+                <input type="password" id="new-password" name="newPassword" required>
+
+            </div>
+
+            <div class="form-group">
+
+                <label for="confirm-password">确认新密码</label>
+
+                <input type="password" id="confirm-password" required>
+
+            </div>
+
+            <button type="submit">确认修改</button>
+
+            <div id="modal-feedback" class="feedback"></div>
+
+        </form>
+
+    </div>
+
+</div>
+
+
+
+<div id="contact-context-menu" class="context-menu">
+
+    <ul>
+
+        <li id="remark-option" onclick="updateRemark()">修改备注</li>
+
+        <li onclick="deleteContact()">删除联系人</li>
+
+    </ul>
+
+</div>
+
+
+
+<script>
+    // ================= 全局状态管理 =================
+    const state = {
+        currentUser: null,
+        contacts: [],
+        notifications: [],
+        chatRooms: [],
+        activeChat: {
+            roomId: null,
+            socket: null,
+            partnerId: null,
+            roomName: null
+        },
+        isPartnerInChatRoom: false
+    };
+    let notificationSocket = null;
+    let verificationType = 'password';
+    let activeContactId = null;
+    let notificationHeartbeatInterval = null;
+    let chatHeartbeatInterval = null;
+
+    // ================= 页面元素获取 (单一来源) =================
+    const changePasswordLink = document.getElementById('change-password-link');
+    const logoutButton = document.getElementById('logout-button');
+    const passwordModal = document.getElementById('password-modal');
+    const closeModalButton = document.querySelector('.close-button');
+    const passwordForm = document.getElementById('change-password-form');
+    const modalFeedback = document.getElementById('modal-feedback');
+    const verifyByPasswordLink = document.getElementById('verify-by-password');
+    const verifyByQuestionLink = document.getElementById('verify-by-question');
+    const passwordFields = document.getElementById('password-fields');
+    const questionFields = document.getElementById('question-fields');
+    const userQuestionDisplay = document.getElementById('user-question-display');
+    const oldPasswordInput = document.getElementById('old-password');
+    const answerInput = document.getElementById('modal-answer');
+    const contactsPanel = document.getElementById('contacts-panel');
+    const friendRequestsSection = document.getElementById('friend-requests-section');
+    const friendRequestsListEl = document.getElementById('friend-requests-list');
+    const contactListEl = document.getElementById('contact-list');
+    const searchInput = document.getElementById('search-users-input');
+    const searchResultsContainer = document.getElementById('search-results-container');
+    const azIndexer = document.getElementById('az-indexer');
+    const contextMenu = document.getElementById('contact-context-menu');
+    const chatRoomListEl = document.getElementById('chat-room-list');
+    const chatListView = document.getElementById('chat-list-view');
+    const chatWindowContainer = document.getElementById('chat-window-container');
+    const chatWindowTitle = document.getElementById('chat-window-title');
+    const messageList = document.getElementById('message-list');
+    const attachmentBtn = document.getElementById('attachment-btn');
+    const attachmentMenu = document.getElementById('attachment-menu');
+    const messageInput = document.getElementById('chat-message-input');
+    const sendBtn = document.getElementById('send-chat-message-btn');
+
+    // ================= 数据获取与渲染 (修复版本) =================
+    async function loadInitialData() {
+        const fetchOptions = {
+            method: 'GET',
+            credentials: 'same-origin'
+        };
+        try {
+            console.log('正在获取用户详情...');
+            const detailsRes = await fetch('api/user/details', fetchOptions);
+            if (!detailsRes.ok) {
+                throw new Error(`身份验证失败，无法获取用户详情! 状态码: ${detailsRes.status}`);
+            }
+            state.currentUser = await detailsRes.json();
+            renderProfile();
+            console.log('用户详情已获取。');
+
+            console.log('正在获取联系人列表...');
+            const contactsRes = await fetch('api/contacts', fetchOptions);
+            if (!contactsRes.ok) throw new Error(`获取联系人列表失败! 状态码: ${contactsRes.status}`);
+            state.contacts = await contactsRes.json();
+            console.log('联系人列表已获取。');
+
+            console.log('正在获取通知列表...');
+            const notificationsRes = await fetch('api/contacts/request', fetchOptions);
+            if (!notificationsRes.ok) throw new Error(`获取通知列表失败! 状态码: ${notificationsRes.status}`);
+            state.notifications = await notificationsRes.json();
+            console.log('通知列表已获取。');
+
+            console.log('正在获取聊天室列表...');
+            const roomsRes = await fetch('api/rooms', fetchOptions);
+            if (!roomsRes.ok) throw new Error(`获取聊天室列表失败! 状态码: ${roomsRes.status}`);
+            state.chatRooms = await roomsRes.json();
+            console.log('聊天室列表已获取。');
+
+            console.log('正在获取在线用户列表...');
+            const onlineUsersRes = await fetch('api/users/online-contacts', fetchOptions);
+            if (!onlineUsersRes.ok) throw new Error(`获取在线好友失败! 状态码: ${onlineUsersRes.status}`);
+            state.onlineUsers = new Set(await onlineUsersRes.json());
+            console.log('在线用户列表已获取。');
+
+            console.log('所有初始数据获取成功，正在渲染UI...');
+            renderNotifications();
+            renderContacts();
+            renderChatRooms();
+            console.log('UI渲染完成。');
+        } catch (error) {
+            console.error('获取初始数据失败:', error);
+            alert(`页面加载失败，即将返回登录页。\n\n错误详情: ${error.message}`);
+            window.location.href = 'login.html';
+        }
+    }
+
+    function renderProfile() {
+        document.getElementById('profile-nickname').textContent = state.currentUser.nickname;
+        document.getElementById('profile-account').textContent = `账号: ${state.currentUser.account}`;
+        document.getElementById('profile-avatar').src = `api/avatar?userId=${state.currentUser.id}&t=${new Date().getTime()}`;
+        document.getElementById('user-question-display').textContent = state.currentUser.securityQuestion;
+    }
+
+    function renderNotifications() {
+        if (state.notifications.length === 0) {
+            friendRequestsSection.style.display = 'none';
+            return;
+        }
+        friendRequestsSection.style.display = 'block';
+        friendRequestsListEl.innerHTML = state.notifications.map(noti => {
+            if (noti.type === 'received' && noti.status === 'pending') {
+                return `<li class="friend-request-item"><div class="contact-avatar-wrapper"><img class="contact-avatar" src="api/avatar?userId=${noti.otherUserId}" alt="${noti.otherUserNickname}"></div><span class="contact-name">${noti.otherUserNickname} 想添加你为好友</span><div class="request-actions"><button class="btn-accept" onclick="respondToRequest(${noti.id}, 'accepted')">接受</button><button class="btn-reject" onclick="respondToRequest(${noti.id}, 'rejected')">拒绝</button></div></li>`;
+            } else if (noti.type === 'sent' && noti.status === 'accepted') {
+                return `<li class="friend-request-item notification-info"><span class="contact-name">${noti.otherUserNickname} 已接受了你的好友请求。</span><button onclick="updateNotificationStatus(${noti.id}, 'accepted_seen')">知道了</button></li>`;
+            } else if (noti.type === 'sent' && noti.status === 'rejected') {
+                return `<li class="friend-request-item notification-info"><span class="contact-name">${noti.otherUserNickname} 拒绝了你的好友请求。</span><button onclick="updateNotificationStatus(${noti.id}, 'rejected_seen')">知道了</button></li>`;
+            }
+            return '';
+        }).join('');
+    }
+
+    function renderContacts() {
+        if (state.contacts.length === 0) {
+            contactListEl.innerHTML = '<li style="padding: 10px; color: #888;">您还没有联系人，快去搜索添加吧！</li>';
+            azIndexer.innerHTML = '';
+            return;
+        }
+        const contactsWithDisplayName = state.contacts.map(c => ({...c, displayName: (c.remarkName || c.nickname) }));
+        contactsWithDisplayName.sort((a, b) => pinyinPro.pinyin(a.displayName, { toneType: 'none' }).localeCompare(pinyinPro.pinyin(b.displayName, { toneType: 'none' }), 'zh-Hans-CN-u-co-pinyin'));
+        const groupedContacts = contactsWithDisplayName.reduce((acc, contact) => {
+            const firstLetter = pinyinPro.pinyin(contact.displayName, { toneType: 'none' }).charAt(0).toUpperCase();
+            if (!acc[firstLetter]) acc[firstLetter] = [];
+            acc[firstLetter].push(contact);
+            return acc;
+        }, {});
+        let contactsHtml = '', indexerHtml = '';
+        Object.keys(groupedContacts).sort().forEach(letter => {
+            contactsHtml += `<div class="contact-group"><h4 id="group-${letter}">${letter}</h4></div>`;
+            indexerHtml += `<a href="#group-${letter}">${letter}</a>`;
+            contactsHtml += groupedContacts[letter].map(contact => {
+                const safeDisplayName = contact.displayName.replace(/'/g, "\\'").replace(/"/g, "&quot;");
+                const isOnline = state.onlineUsers.has(contact.id);
+                const statusClass = isOnline ? 'status-online' : 'status-offline';
+                return `<li class="contact-item" onclick="startPrivateChat(${contact.id}, '${safeDisplayName}')" oncontextmenu="showContextMenu(event, ${contact.id}, '${safeDisplayName}')" title="账号: ${contact.account}"><div class="contact-avatar-wrapper"><img class="contact-avatar" src="api/avatar?userId=${contact.id}" alt="${safeDisplayName}"><div class="status-indicator ${statusClass}"></div></div><span class="contact-name">${contact.displayName}</span></li>`;
+            }).join('');
+        });
+        contactListEl.innerHTML = contactsHtml;
+        azIndexer.innerHTML = indexerHtml;
+    }
+
+    function renderSearchResults(users) {
+        if (users.length === 0) {
+            searchResultsContainer.innerHTML = '<div class="search-result-item">未找到用户</div>';
+            return;
+        }
+        searchResultsContainer.innerHTML = users.map(user => `<div class="search-result-item"><div class="contact-avatar-wrapper"><img class="contact-avatar" src="api/avatar?userId=${user.id}" alt="${user.nickname}"></div><span class="contact-name">${user.nickname} (${user.account})</span><button onclick="sendFriendRequest(${user.id})">添加</button></div>`).join('');
+    }
+
+    function renderChatRooms() {
+        if (state.chatRooms.length === 0) {
+            chatRoomListEl.innerHTML = '<li>没有聊天会话，快去联系人列表发起聊天吧！</li>';
+            return;
+        }
+        chatRoomListEl.innerHTML = state.chatRooms.map(room => {
+            const roomName = room.isPrivate ? room.partnerNickname : "群聊";
+            const partnerId = room.isPrivate ? room.partnerId : 0;
+            const safeRoomName = roomName.replace(/'/g, "\\'");
+            const isOnline = state.onlineUsers.has(partnerId);
+            const statusClass = isOnline ? 'status-online' : 'status-offline';
+            return `<li class="chat-item" onclick="openChatWindow(${room.id}, '${safeRoomName}', ${partnerId})"><div class="contact-avatar-wrapper"><img class="contact-avatar" src="api/avatar?userId=${partnerId}" alt="${safeRoomName}"><div class="status-indicator ${statusClass}"></div></div><span class="contact-name">${roomName}</span></li>`;
+        }).join('');
+    }
+
+    // ================= 聊天核心功能 (最终版) =================
+    function openChatWindow(roomId, roomName, partnerId) {
+        if (state.activeChat.roomId === roomId) return;
+        if (state.activeChat.socket) closeChatWindow();
+
+        state.activeChat.roomId = roomId;
+        state.activeChat.roomName = roomName;
+        state.activeChat.partnerId = partnerId;
+        state.isPartnerInChatRoom = false;
+
+        updateChatWindowHeader(roomName, state.onlineUsers.has(partnerId));
+        messageList.innerHTML = '';
+
+        chatListView.style.display = 'none';
+        chatWindowContainer.style.display = 'flex';
+
+        state.activeChat.socket = new WebSocket(`ws://${window.location.host}/RealtimeChat/chat/${roomId}`);
+
+        state.activeChat.socket.onopen = () => {
+            console.log("聊天室 WebSocket 连接成功: " + roomId);
+            if (chatHeartbeatInterval) clearInterval(chatHeartbeatInterval);
+            chatHeartbeatInterval = setInterval(() => {
+                if (state.activeChat.socket && state.activeChat.socket.readyState === WebSocket.OPEN) {
+                    state.activeChat.socket.send(JSON.stringify({ type: "ping" }));
+                }
+            }, 15000);
+        };
+
+        state.activeChat.socket.onclose = (event) => {
+            console.log(`聊天室 WebSocket 连接关闭: ${roomId}, Code: ${event.code}`);
+            if (state.activeChat.roomId === roomId) {
+                console.log("连接意外断开。");
+            }
+        };
+
+        state.activeChat.socket.onmessage = (event) => {
+            const messagePacket = JSON.parse(event.data);
+            let currentHistory = JSON.parse(localStorage.getItem(`chat_history_${roomId}`)) || [];
+            let updatedHistory = [...currentHistory];
+
+            switch (messagePacket.type) {
+                case 'history':
+                    updatedHistory = messagePacket.data;
+                    break;
+                case 'new_message':
+                    const newMessage = messagePacket.data;
+                    if (!updatedHistory.some(msg => msg.id === newMessage.id)) {
+                        if (newMessage.senderId === state.currentUser.id) {
+                            const tempMsgIndex = updatedHistory.findIndex(msg => msg.id && msg.id.startsWith('temp-') && msg.content === newMessage.content);
+                            if (tempMsgIndex !== -1) {
+                                updatedHistory[tempMsgIndex] = newMessage;
+                            } else {
+                                updatedHistory.push(newMessage);
+                            }
+                        } else {
+                            updatedHistory.push(newMessage);
+                        }
+                    }
+                    break;
+                case 'read_status_update':
+                    const messageIds = messagePacket.messageIds;
+                    updatedHistory.forEach(msg => {
+                        if (msg.senderId === state.currentUser.id && messageIds.includes(msg.id)) {
+                            msg.isRead = true;
+                        }
+                    });
+                    break;
+                case 'partner_status_change':
+                    state.isPartnerInChatRoom = messagePacket.status === 'online';
+                    updatedHistory.forEach(msg => {
+                        if (msg.senderId === state.currentUser.id && !msg.isRead) {
+                            msg.isRead = state.isPartnerInChatRoom;
+                        }
+                    });
+                    updateChatWindowHeader(state.activeChat.roomName, state.isPartnerInChatRoom);
+                    break;
+                default:
+                    return;
+            }
+            localStorage.setItem(`chat_history_${roomId}`, JSON.stringify(updatedHistory));
+            renderMessages(updatedHistory, messageList);
+        };
+    }
+
+    function closeChatWindow() {
+        if (chatHeartbeatInterval) {
+            clearInterval(chatHeartbeatInterval);
+            chatHeartbeatInterval = null;
+        }
+        if (state.activeChat.socket) {
+            state.activeChat.socket.onclose = null;
+            state.activeChat.socket.close();
+        }
+        state.activeChat.roomId = null;
+        state.activeChat.socket = null;
+        chatListView.style.display = 'block';
+        chatWindowContainer.style.display = 'none';
+    }
+
+    function renderMessages(messages, container) {
+        if (!container) return;
+        container.innerHTML = messages.map(msg => createMessageHTML(msg)).join('');
+        container.scrollTop = container.scrollHeight;
+    }
+
+    function appendMessage(msg, container) {
+        if (!container) return;
+        const messageHtml = createMessageHTML(msg);
+        container.innerHTML += messageHtml;
+        container.scrollTop = container.scrollHeight;
+    }
+
+    function createMessageHTML(msg) {
+        if (!msg || typeof msg.content === 'undefined') return '';
+        const messageClass = msg.senderId === state.currentUser.id ? 'mine' : 'theirs';
+        let bubbleClass = '';
+        if (messageClass === 'mine') {
+            bubbleClass = msg.isRead ? 'mine-read' : 'mine-unread';
+        } else {
+            bubbleClass = 'theirs-default';
+        }
+        const safeContent = msg.content.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        const date = new Date(msg.timestamp);
+        const hours = date.getHours().toString().padStart(2, '0');
+        const minutes = date.getMinutes().toString().padStart(2, '0');
+        const formattedTime = `${hours}:${minutes}`;
+        return `<li class="${messageClass} ${bubbleClass}"><div class="message-bubble"><span class="message-bubble-content">${safeContent}</span><div class="message-meta"><span>${formattedTime}</span></div></div></li>`;
+    }
+
+    function updateChatWindowHeader(roomName, isOnline) {
+        if (chatWindowTitle) {
+            const statusClass = isOnline ? 'status-online' : 'status-offline';
+            chatWindowTitle.innerHTML = `${roomName} <div class="chat-header-status ${statusClass}"></div>`;
+        }
+    }
+
+    // ================= 用户交互功能 =================
+    function debounce(func, delay) { let timeout; return (...args) => { clearTimeout(timeout); timeout = setTimeout(() => func.apply(this, args), delay); }; }
+
+    const handleSearch = debounce(async (event) => {
+        const query = event.target.value.trim();
+        searchResultsContainer.style.display = query.length > 0 ? 'block' : 'none';
+        if (query.length < 1) return;
+        const response = await fetch(`api/users/search?query=${encodeURIComponent(query)}`);
+        const users = await response.json();
+        renderSearchResults(users);
+    }, 300);
+
+    async function sendFriendRequest(receiverId) {
+        await fetch('api/contacts/request', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: `action=send&receiverId=${receiverId}` });
+        alert('好友请求已发送！');
+        searchInput.value = '';
+        searchResultsContainer.style.display = 'none';
+        loadInitialData();
+    }
+
+    async function respondToRequest(requestId, status) {
+        await fetch('api/contacts/request', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: `action=respond&requestId=${requestId}&status=${status}` });
+        loadInitialData();
+    }
+
+    async function updateNotificationStatus(requestId, newStatus) {
+        await fetch('api/contacts/request', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: `action=update_status&requestId=${requestId}&newStatus=${newStatus}` });
+        loadInitialData();
+    }
+
+    async function startPrivateChat(contactId, contactName) {
+        try {
+            const response = await fetch('api/rooms/private/start', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: `contactId=${contactId}` });
+            if (!response.ok) {
+                if (response.status === 403) { alert(`您与 ${contactName} 已不是好友关系。`); loadInitialData(); }
+                else { const errorText = await response.text(); throw new Error(`服务器响应错误: ${response.status} - ${errorText}`); }
+                return;
+            }
+            const data = await response.json();
+            const roomId = data.roomId;
+            if (!roomId) throw new Error("服务器未能返回有效的房间ID。");
+            switchPanel('chats');
+            openChatWindow(roomId, contactName, contactId);
+            const roomsRes = await fetch('api/rooms');
+            if (roomsRes.ok) { state.chatRooms = await roomsRes.json(); renderChatRooms(); }
+        } catch (error) { console.error("发起私聊失败:", error); alert('发起聊天失败，请稍后重试。'); }
+    }
+
+    function showContextMenu(event, contactId, displayName) {
+        event.preventDefault();
+        activeContactId = contactId;
+        contextMenu.querySelector('#remark-option').textContent = `修改备注 (${displayName})`;
+        contextMenu.style.top = `${event.clientY}px`;
+        contextMenu.style.left = `${event.clientX}px`;
+        contextMenu.style.display = 'block';
+    }
+
+    async function deleteContact() {
+        if (confirm("确定要删除这位联系人吗？此操作不可恢复。")) {
+            await fetch('api/contacts/action', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: `action=delete&contactId=${activeContactId}` });
+            loadInitialData();
+        }
+    }
+
+    async function updateRemark() {
+        const remark = prompt("请输入新的备注名（留空则清除备注）：");
+        if (remark !== null) {
+            await fetch('api/contacts/action', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: `action=remark&contactId=${activeContactId}&remark=${encodeURIComponent(remark)}` });
+            loadInitialData();
+        }
+    }
+
+    // ================= WebSocket通知系统 =================
+    function connectNotificationSocket() {
+        if (notificationSocket) notificationSocket.close();
+        if (notificationHeartbeatInterval) clearInterval(notificationHeartbeatInterval);
+
+        const wsUrl = `ws://${window.location.host}/RealtimeChat/notifications`;
+        notificationSocket = new WebSocket(wsUrl);
+
+        let isConnected = false;
+
+        notificationSocket.onopen = () => {
+            console.log("成功连接到实时通知服务！");
+            isConnected = true;
+            notificationHeartbeatInterval = setInterval(() => {
+                if (notificationSocket.readyState === WebSocket.OPEN) {
+                    notificationSocket.send(JSON.stringify({ type: "ping" }));
+                }
+            }, 30000);
+        };
+
+        notificationSocket.onmessage = (event) => {
+            const notification = JSON.parse(event.data);
+            if (notification.type === 'ping') return;
+            if (notification.type === 'status_change') {
+                updateUserStatus(notification.userId, notification.status);
+            } else if (notification.type === 'new_friend_request' || notification.type === 'request_responded') {
+                alert("您有新的好友通知！");
+                loadInitialData();
+            }
+        };
+
+        notificationSocket.onclose = () => {
+            console.log("通知服务已断开，将在5秒后尝试重连...");
+            isConnected = false;
+            if (notificationHeartbeatInterval) clearInterval(notificationHeartbeatInterval);
+            setTimeout(connectNotificationSocket, 5000);
+        };
+    }
+
+    function updateUserStatus(userId, isOnlineStatus) {
+        const isOnline = isOnlineStatus === 'online';
+        if (isOnline) {
+            state.onlineUsers.add(userId);
+        } else {
+            state.onlineUsers.delete(userId);
+        }
+        renderContacts();
+        renderChatRooms();
+        if (state.activeChat.partnerId === userId) {
+            updateChatWindowHeader(state.activeChat.roomName, isOnline);
+        }
+    }
+
+    // ================= 页面加载与事件监听 =================
+    document.addEventListener('DOMContentLoaded', async () => {
+        await loadInitialData();
+        if (state.currentUser) connectNotificationSocket();
+    });
+    searchInput.addEventListener('input', handleSearch);
+    document.getElementById('nav-contacts').addEventListener('click', loadInitialData);
+    document.getElementById('nav-me').addEventListener('click', loadInitialData);
+    window.addEventListener('click', () => { if (contextMenu.style.display === 'block') contextMenu.style.display = 'none'; });
+
+    attachmentBtn.addEventListener('click', () => {
+        const isVisible = attachmentMenu.style.display === 'block';
+        attachmentMenu.style.display = isVisible ? 'none' : 'block';
+    });
+    messageInput.addEventListener('input', () => {
+        messageInput.style.height = 'auto';
+        messageInput.style.height = (messageInput.scrollHeight) + 'px';
+    });
+
+    const sendMessage = () => {
+        const msg = messageInput.value.trim();
+        if (!msg) return;
+        if (!state.activeChat.socket || state.activeChat.socket.readyState !== WebSocket.OPEN) {
+            showToast("连接已断开，消息发送失败");
+            return;
+        }
+        const currentRoomId = state.activeChat.roomId;
+
+        const localMessage = {
+            id: `temp-${Date.now()}`,
+            senderId: state.currentUser.id,
+            content: msg,
+            timestamp: Date.now(),
+            isRead: state.isPartnerInChatRoom
+        };
+
+        let currentHistory = JSON.parse(localStorage.getItem(`chat_history_${currentRoomId}`)) || [];
+        currentHistory.push(localMessage);
+        localStorage.setItem(`chat_history_${currentRoomId}`, JSON.stringify(currentHistory));
+        appendMessage(localMessage, messageList);
+
+        state.activeChat.socket.send(msg);
+        messageInput.value = '';
+        messageInput.style.height = 'auto';
+        messageInput.focus();
+    };
+
+    messageInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+        }
+    });
+    sendBtn.addEventListener('click', sendMessage);
+
+    // ================= V1.0: 核心UI控制 =================
+    function switchPanel(panelName) {
+        console.log(`--- [switchPanel探针] ---`);
+        console.log(`请求切换到面板: ${panelName}`);
+        document.querySelectorAll('.panel').forEach(panel => panel.classList.remove('active'));
+        const activePanel = document.getElementById(`${panelName}-panel`);
+        if (activePanel) {
+            activePanel.classList.add('active');
+            console.log(`已为 #${activePanel.id} 添加 'active' class。`);
+        } else {
+            console.error(`错误: 找不到ID为 '${panelName}-panel' 的面板！`);
+        }
+        document.querySelectorAll('.nav-button').forEach(button => button.classList.remove('active'));
+        const activeNavButton = document.getElementById(`nav-${panelName}`);
+        if (activeNavButton) activeNavButton.classList.add('active');
+    }
+    const closeModal = () => {
+        passwordModal.style.display = 'none';
+        passwordForm.reset();
+        modalFeedback.textContent = '';
+        passwordFields.style.display = 'block';
+        questionFields.style.display = 'none';
+        verifyByPasswordLink.classList.add('active');
+        verifyByQuestionLink.classList.remove('active');
+        verificationType = 'password';
+    };
+    changePasswordLink.addEventListener('click', (e) => { e.preventDefault(); passwordModal.style.display = 'flex'; });
+    closeModalButton.addEventListener('click', closeModal);
+    window.addEventListener('click', (e) => { if (e.target === passwordModal) closeModal(); });
+    verifyByPasswordLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        verificationType = 'password';
+        passwordFields.style.display = 'block';
+        questionFields.style.display = 'none';
+        verifyByPasswordLink.classList.add('active');
+        verifyByQuestionLink.classList.remove('active');
+        answerInput.required = false;
+        oldPasswordInput.required = true;
+    });
+    verifyByQuestionLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        verificationType = 'question';
+        passwordFields.style.display = 'none';
+        questionFields.style.display = 'block';
+        verifyByPasswordLink.classList.remove('active');
+        verifyByQuestionLink.classList.add('active');
+        answerInput.required = true;
+        oldPasswordInput.required = false;
+    });
+    passwordForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        modalFeedback.textContent = '';
+        const newPassword = document.getElementById('new-password').value;
+        const confirmPassword = document.getElementById('confirm-password').value;
+        if (newPassword !== confirmPassword) { modalFeedback.textContent = '两次输入的新密码不匹配！'; return; }
+        if (newPassword.length < 6) { modalFeedback.textContent = '新密码长度不能少于6位！'; return; }
+        const formData = new URLSearchParams();
+        formData.append('newPassword', newPassword);
+        formData.append('verificationType', verificationType);
+        if (verificationType === 'password') { formData.append('oldPassword', oldPasswordInput.value); }
+        else { formData.append('answer', answerInput.value); }
+        try {
+            const response = await fetch('api/change-password', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: formData });
+            if (response.ok) { alert('密码修改成功！您需要重新登录。'); window.location.href = 'login.html'; }
+            else { const errorMessage = await response.text(); modalFeedback.textContent = errorMessage; }
+        } catch (error) { modalFeedback.textContent = '请求失败，请检查网络连接。'; }
+    });
+    logoutButton.addEventListener('click', async () => {
+        try {
+            const response = await fetch('api/logout', { method: 'POST' });
+            if (!response.ok) console.error('Server-side logout failed with status:', response.status);
+        } catch (error) {
+            console.error('Error sending logout request:', error);
+        } finally {
+            alert('您已退出登录。');
+            window.location.href = 'login.html';
+        }
+    });
+
+    let toastTimer;
+    function showToast(message) {
+        const toast = document.getElementById('toast-notification');
+        if (!toast) return;
+        toast.textContent = message;
+        toast.classList.add('show');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => {
+            toast.classList.remove('show');
+        }, 2500);
+    }
+</script>
+
+
+</body>
+
+</html>
