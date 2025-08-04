@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>用户注册</title>
+
+<style>
+     /* General Setup */
+ * { box-sizing: border-box; }
+html { height: 100%; }
+body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background-color: #f0f2f5;
+    padding: 40px 15px; /* 在顶部和底部增加内边距 */
+}
+/* Form Container - 使用margin:auto实现水平居中 */
+.container {
+    padding: 30px 40px;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    width: 100%;
+    max-width: 420px;
+    margin: 0 auto; /* 水平居中 */
+}
+/* Typography */
+h2 { text-align: center; color: #333; margin-top: 0; margin-bottom: 25px; }
+/* Form Elements */
+.form-group { margin-bottom: 18px; text-align: left; }
+label { display: block; margin-bottom: 6px; font-weight: bold; color: #555; font-size: 14px; }
+input[type="text"], input[type="password"], input[type="file"], select {
+    width: 100%; padding: 12px 15px; border: 1px solid #ddd; border-radius: 6px; font-size: 16px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+input:focus, select:focus {
+    outline: none; border-color: #28a745; box-shadow: 0 0 0 3px rgba(40, 167, 69, 0.2);
+}
+input[type="file"] { padding: 8px; }
+/* Button */
+button {
+    width: 100%; padding: 12px; background-color: #28a745; color: white; border: none; border-radius: 6px;
+    cursor: pointer; font-size: 16px; font-weight: bold; margin-top: 10px; transition: background-color 0.2s;
+}
+button:hover { background-color: #218838; }
+button:disabled { background-color: #94dcb0; cursor: not-allowed; }
+/* Feedback & Links */
+.feedback { color: #d93025; font-size: 12px; height: 15px; margin-top: 4px; }
+.login-link { text-align: center; margin-top: 20px; font-size: 14px; }
+.login-link a { color: #007bff; text-decoration: none; }
+.login-link a:hover { text-decoration: underline; }
+/* Custom question input styling */
+#custom-question-group { display: none; }
+</style>
+</head>
+<body>
+
+<div class="container">
+    <h2>创建新账号</h2>
+    <form id="register-form" enctype="multipart/form-data">
+        <div class="form-group">
+            <label for="account">账号</label>
+            <input type="text" id="account" name="account" required>
+            <div id="account-feedback" class="feedback">账号需为6-13位字母或数字</div>
+        </div>
+        <div class="form-group">
+            <label for="nickname">昵称</label>
+            <input type="text" id="nickname" name="nickname" required>
+        </div>
+        <div class="form-group">
+            <label for="password">密码</label>
+            <input type="password" id="password" name="password" required>
+        </div>
+        <div class="form-group">
+            <label for="avatar">头像</label>
+            <input type="file" id="avatar" name="avatar" accept="image/*" required>
+        </div>
+
+        <div class="form-group">
+            <label for="security-question-select">安全问题</label>
+            <select id="security-question-select" required>
+                <option value="">请选择一个问题...</option>
+                <option value="您母亲的姓名是？">您母亲的姓名是？</option>
+                <option value="您的小学校名是？">您的小学校名是？</option>
+                <option value="您最喜欢的颜色是？">您最喜欢的颜色是？</option>
+                <option value="custom">自定义问题...</option>
+            </select>
+        </div>
+        <div id="custom-question-group" class="form-group">
+            <label for="custom-question-input">请输入您自定义的问题：</label>
+            <input type="text" id="custom-question-input">
+        </div>
+        <input type="hidden" id="security-question-hidden" name="security_question">
+        <div class="form-group">
+            <label for="security-answer">问题答案</label>
+            <input type="text" id="security-answer" name="security_answer" required>
+        </div>
+        <button type="submit">注册</button>
+    </form>
+    <div id="form-feedback" class="feedback" style="text-align: center; margin-top: 10px; font-weight: bold;"></div>
+    <div class="login-link">
+        <p>已有账号？ <a href="login.html">返回登录</a></p>
+    </div>
+</div>
+
+<script>
+    // --- 获取所有需要的元素 ---
+    const form = document.getElementById('register-form');
+    const accountInput = document.getElementById('account');
+    const accountFeedback = document.getElementById('account-feedback');
+    const accountRegex = /^[a-zA-Z0-9]{6,13}$/;
+    const questionSelect = document.getElementById('security-question-select');
+    const customQuestionGroup = document.getElementById('custom-question-group');
+    const customQuestionInput = document.getElementById('custom-question-input');
+    const hiddenQuestionInput = document.getElementById('security-question-hidden');
+
+    // --- 状态变量 ---
+    let isAccountFormatValid = false;
+    let isAccountAvailable = false;
+    let isCheckingAccount = false; // 防止重复检查
+
+    // --- 实时校验函数 ---
+    const validateAccount = async () => {
+        const account = accountInput.value.trim();
+        isAccountFormatValid = false;
+        isAccountAvailable = false;
+
+        // 步骤1：校验格式
+        if (!accountRegex.test(account)) {
+            accountFeedback.textContent = '账号需为6-13位字母或数字';
+            accountFeedback.style.color = 'red';
+            return;
+        }
+        isAccountFormatValid = true;
+
+        // 步骤2：格式正确，发送请求到后端检查是否重复
+        isCheckingAccount = true;
+        accountFeedback.textContent = '检查中...';
+        accountFeedback.style.color = 'grey';
+        try {
+            const response = await fetch(`api/check-account?account=${encodeURIComponent(account)}`);
+            const message = await response.text();
+
+            if (response.ok) { // 状态码 200
+                accountFeedback.textContent = message;
+                accountFeedback.style.color = 'green';
+                isAccountAvailable = true;
+            } else { // 状态码 409
+                accountFeedback.textContent = message;
+                accountFeedback.style.color = 'red';
+            }
+        } catch (error) {
+            accountFeedback.textContent = '检查失败，请检查网络';
+            accountFeedback.style.color = 'red';
+        } finally {
+            isCheckingAccount = false;
+        }
+    };
+
+    // --- 事件监听 ---
+    // 当输入框失去焦点时 (用户切换到其他框)，触发校验
+    accountInput.addEventListener('blur', validateAccount);
+
+    // 监听密保问题下拉框的变化
+    questionSelect.addEventListener('change', () => {
+        if (questionSelect.value === 'custom') {
+            customQuestionGroup.style.display = 'block';
+            customQuestionInput.required = true;
+        } else {
+            customQuestionGroup.style.display = 'none';
+            customQuestionInput.required = false;
+        }
+    });
+
+    // 表单提交事件监听
+    form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+
+        // 提交时，再次确保账号格式正确且可用
+        if (!isAccountFormatValid) {
+            alert('注册失败: 账号格式不符合规范 (6-13位字母或数字)。');
+            return;
+        }
+        if (isCheckingAccount) {
+            alert('正在检查账号可用性，请稍候...');
+            return;
+        }
+        if (!isAccountAvailable) {
+            alert('注册失败: 该账号已被注册或尚未完成检查。');
+            // 如果用户没触发过blur，可以主动触发一次
+            if (accountInput.value.trim()) {
+                await validateAccount();
+            }
+            return;
+        }
+
+        // 处理最终的安全问题
+        let finalQuestion = questionSelect.value;
+        if (finalQuestion === 'custom') {
+            finalQuestion = customQuestionInput.value.trim();
+            if (!finalQuestion) {
+                alert('注册失败: 自定义安全问题不能为空！');
+                return;
+            }
+        }
+        hiddenQuestionInput.value = finalQuestion;
+
+        const formData = new FormData(form);
+        const submitButton = form.querySelector('button');
+        submitButton.disabled = true;
+        submitButton.textContent = '注册中...';
+
+        try {
+            const response = await fetch('api/register', {
+                method: 'POST',
+                body: formData
+            });
+
+            if (response.status === 201) {
+                alert('注册成功！将跳转到登录页面。');
+                window.location.href = 'login.html?registered=true';
+            } else {
+                const errorMessage = await response.text();
+                alert(`注册失败: ${errorMessage}`);
+            }
+        } catch (error) {
+            console.error('注册请求失败:', error);
+            alert('注册失败，请检查网络连接或联系管理员。');
+        } finally {
+            submitButton.disabled = false;
+            submitButton.textContent = '注册';
+        }
+    });
+</script>
+</body>
+</html>

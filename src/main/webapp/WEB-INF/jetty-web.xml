@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE Configure PUBLIC "-//Jetty//Configure//EN" "classpath:dtd/configure_10_0.dtd">
+
+<Configure id="webApp" class="org.eclipse.jetty.webapp.WebAppContext">
+    <Call name="setInitParameter">
+        <Arg>org.eclipse.jetty.websocket.idleTimeout</Arg>
+        <Arg>600000</Arg>
+    </Call>
+</Configure>
